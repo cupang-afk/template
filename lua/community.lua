@@ -21,5 +21,6 @@ return {
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
   { import = "astrocommunity.comment.ts-comments-nvim" },
   { import = "astrocommunity.ai.sidekick-nvim" },
+  { import = "astrocommunity.split-and-window.colorful-winsep-nvim" },
   -- import/override with your plugins folder
 }
