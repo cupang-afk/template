@@ -71,11 +71,11 @@ return {
         auto_trigger_ft = { "*" },
         keymap = {
           accept = false, -- handled by recipes.ai (<Tab>)
-          accept_line = "<M-j>",
-          accept_n_lines = "<M-z>",
-          prev = "<M-[>",
-          next = "<M-]>",
-          dismiss = "<M-e>",
+          accept_line = nil,
+          accept_n_lines = nil,
+          prev = nil,
+          next = nil,
+          dismiss = nil,
         },
       },
     },
