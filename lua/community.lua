@@ -49,6 +49,7 @@ return {
   {
     "Exafunction/codeium.nvim",
     opts = {
+      enable_chat = false,
       enable_cmp_source = false, -- no nvim-cmp in this setup
       virtual_text = { enabled = true }, -- inline ghost text, like Supermaven
     },
