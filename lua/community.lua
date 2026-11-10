@@ -45,15 +45,6 @@ return {
   { "AstroNvim/astroui", opts = { colorscheme = "catppuccin-nvim" } },
   { import = "astrocommunity.completion.blink-cmp" },
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
-  { import = "astrocommunity.completion.codeium-nvim" },
-  {
-    "Exafunction/codeium.nvim",
-    opts = {
-      enable_chat = false,
-      enable_cmp_source = false, -- no nvim-cmp in this setup
-      virtual_text = { enabled = true }, -- inline ghost text, like Supermaven
-    },
-  },
   { import = "astrocommunity.scrolling.nvim-scrollbar" },
   { import = "astrocommunity.editing-support.wildfire-nvim" },
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
