@@ -50,6 +50,35 @@ return {
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
   { import = "astrocommunity.comment.ts-comments-nvim" },
   { import = "astrocommunity.ai.sidekick-nvim" },
+  { import = "astrocommunity.ai.minuet-ai-nvim" },
+  {
+    "milanglacier/minuet-ai.nvim",
+    opts = {
+      provider = "codestral",
+      provider_options = {
+        codestral = {
+          model = "codestral-2508",
+          end_point = "https://api.mistral.ai/v1/fim/completions",
+          api_key = "MISTRAL_KEY",
+          optional = {
+            max_tokens = 256,
+            stop = { "\n\n" },
+          },
+        },
+      },
+      virtualtext = {
+        auto_trigger_ft = { "*" },
+        keymap = {
+          accept = "<M-l>",
+          accept_line = "<M-j>",
+          accept_n_lines = "<M-z>",
+          prev = "<M-[>",
+          next = "<M-]>",
+          dismiss = "<M-e>",
+        },
+      },
+    },
+  },
   { import = "astrocommunity.split-and-window.colorful-winsep-nvim" },
   { import = "astrocommunity.recipes.vscode-icons" },
   { import = "astrocommunity.neovim-lua-development.helpview-nvim" },
