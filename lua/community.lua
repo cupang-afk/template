@@ -45,6 +45,7 @@ return {
   { "AstroNvim/astroui", opts = { colorscheme = "catppuccin-nvim" } },
   { import = "astrocommunity.completion.blink-cmp" },
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
+  { import = "astrocommunity.completion.codeium-nvim" },
   { import = "astrocommunity.scrolling.nvim-scrollbar" },
   { import = "astrocommunity.editing-support.wildfire-nvim" },
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
