@@ -9,5 +9,6 @@ return {
   { import = "astrocommunity.utility.noice-nvim" },
   { import = "astrocommunity.diagnostics.trouble-nvim" },
   { import = "astrocommunity.motion.flash-nvim" },
+  { import = "astrocommunity.editing-support.yanky-nvim" },
   -- import/override with your plugins folder
 }
