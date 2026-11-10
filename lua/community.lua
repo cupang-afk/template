@@ -15,5 +15,6 @@ return {
   { "AstroNvim/astroui", opts = { colorscheme = "catppuccin" } },
   { import = "astrocommunity.completion.blink-cmp" },
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
+  { import = "astrocommunity.completion.supermaven-nvim" },
   -- import/override with your plugins folder
 }
