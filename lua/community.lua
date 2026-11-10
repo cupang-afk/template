@@ -50,6 +50,7 @@ return {
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
   { import = "astrocommunity.comment.ts-comments-nvim" },
   { import = "astrocommunity.ai.sidekick-nvim" },
+  { import = "astrocommunity.recipes.ai" },
   { import = "astrocommunity.ai.minuet-ai-nvim" },
   {
     "milanglacier/minuet-ai.nvim",
@@ -69,12 +70,30 @@ return {
       virtualtext = {
         auto_trigger_ft = { "*" },
         keymap = {
-          accept = "<M-l>",
+          accept = false, -- handled by recipes.ai (<Tab>)
           accept_line = "<M-j>",
           accept_n_lines = "<M-z>",
           prev = "<M-[>",
           next = "<M-]>",
           dismiss = "<M-e>",
+        },
+      },
+    },
+    specs = {
+      {
+        "AstroNvim/astrocore",
+        opts = {
+          options = {
+            g = {
+              ai_accept = function()
+                local vt = require "minuet.virtualtext"
+                if vt.action.is_visible() then
+                  vt.action.accept()
+                  return true
+                end
+              end,
+            },
+          },
         },
       },
     },
