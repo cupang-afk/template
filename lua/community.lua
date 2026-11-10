@@ -56,7 +56,6 @@ return {
   { import = "astrocommunity.neovim-lua-development.helpview-nvim" },
   { import = "astrocommunity.diagnostics.tiny-inline-diagnostic-nvim" },
   { import = "astrocommunity.recipes.heirline-vscode-winbar" },
-  { import = "astrocommunity.recipes.heirline-tabline-buffer-number" },
   { import = "astrocommunity.recipes.neovide" },
   { import = "astrocommunity.recipes.cache-colorscheme" },
   -- import/override with your plugins folder
