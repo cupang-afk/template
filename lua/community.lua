@@ -12,6 +12,11 @@ return {
   { import = "astrocommunity.editing-support.yanky-nvim" },
   { import = "astrocommunity.motion.nvim-surround" },
   { import = "astrocommunity.colorscheme.catppuccin" },
+  {
+    "catppuccin/nvim",
+    name = "catppuccin",
+    opts = { integrations = { neotree = true } },
+  },
   { "AstroNvim/astroui", opts = { colorscheme = "catppuccin" } },
   { import = "astrocommunity.completion.blink-cmp" },
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
