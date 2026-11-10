@@ -56,6 +56,9 @@ return {
     "milanglacier/minuet-ai.nvim",
     opts = {
       provider = "codestral",
+      n_completions = 1, -- single request per trigger; prevents instant 429 on free tier
+      throttle = 1500, -- 1.5s between requests; keeps under Mistral 1 RPS limit
+      debounce = 600, -- wait 600ms after typing stops before firing
       provider_options = {
         codestral = {
           model = "codestral-2508",
