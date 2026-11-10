@@ -22,5 +22,6 @@ return {
   { import = "astrocommunity.comment.ts-comments-nvim" },
   { import = "astrocommunity.ai.sidekick-nvim" },
   { import = "astrocommunity.split-and-window.colorful-winsep-nvim" },
+  { import = "astrocommunity.recipes.vscode-icons" },
   -- import/override with your plugins folder
 }
