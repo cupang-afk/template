@@ -18,5 +18,6 @@ return {
   { import = "astrocommunity.completion.supermaven-nvim" },
   { import = "astrocommunity.scrolling.nvim-scrollbar" },
   { import = "astrocommunity.editing-support.wildfire-nvim" },
+  { import = "astrocommunity.editing-support.nvim-treesitter-context" },
   -- import/override with your plugins folder
 }
