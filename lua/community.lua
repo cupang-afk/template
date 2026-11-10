@@ -17,5 +17,6 @@ return {
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
   { import = "astrocommunity.completion.supermaven-nvim" },
   { import = "astrocommunity.scrolling.nvim-scrollbar" },
+  { import = "astrocommunity.editing-support.wildfire-nvim" },
   -- import/override with your plugins folder
 }
