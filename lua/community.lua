@@ -46,6 +46,8 @@ return {
   { import = "astrocommunity.completion.blink-cmp" },
   { "saghen/blink.compat", version = "^2", lazy = true, opts = {} },
   { import = "astrocommunity.completion.supermaven-nvim" },
+  -- personal fork: Neovim 0.12 API fixes and sm-agent lifecycle fixes
+  { "cupang-afk/supermaven-nvim" },
   { import = "astrocommunity.scrolling.nvim-scrollbar" },
   { import = "astrocommunity.editing-support.wildfire-nvim" },
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
