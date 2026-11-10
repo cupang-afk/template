@@ -28,5 +28,6 @@ return {
   { import = "astrocommunity.recipes.heirline-vscode-winbar" },
   { import = "astrocommunity.recipes.heirline-tabline-buffer-number" },
   { import = "astrocommunity.recipes.neovide" },
+  { import = "astrocommunity.recipes.cache-colorscheme" },
   -- import/override with your plugins folder
 }
