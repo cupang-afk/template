@@ -20,5 +20,6 @@ return {
   { import = "astrocommunity.editing-support.wildfire-nvim" },
   { import = "astrocommunity.editing-support.nvim-treesitter-context" },
   { import = "astrocommunity.comment.ts-comments-nvim" },
+  { import = "astrocommunity.ai.sidekick-nvim" },
   -- import/override with your plugins folder
 }
