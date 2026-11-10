@@ -24,5 +24,6 @@ return {
   { import = "astrocommunity.split-and-window.colorful-winsep-nvim" },
   { import = "astrocommunity.recipes.vscode-icons" },
   { import = "astrocommunity.neovim-lua-development.helpview-nvim" },
+  { import = "astrocommunity.diagnostics.tiny-inline-diagnostic-nvim" },
   -- import/override with your plugins folder
 }
