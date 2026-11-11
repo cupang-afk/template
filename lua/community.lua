@@ -114,5 +114,18 @@ return {
   { import = "astrocommunity.icon.mini-icons" },
   { import = "astrocommunity.editing-support.treesj" },
   { import = "astrocommunity.search.grug-far-nvim" },
+  {
+    import = "astrocommunity.split-and-window.neominimap-nvim",
+  },
+  {
+    "Isrothy/neominimap.nvim",
+    opts = {
+      float = {
+        margin = {
+          right = 2, -- leave space on right edge for satellite scrollbar
+        },
+      },
+    },
+  },
   -- import/override with your plugins folder
 }
