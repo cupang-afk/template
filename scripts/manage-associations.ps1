@@ -256,6 +256,20 @@ function ConvertTo-RegString {
 $exe = Find-Neovide -ExplicitPath $NeovidePath
 $exeReg = ConvertTo-RegString $exe
 
+# Check for custom C single-instance launcher
+$launcherDir = Join-Path $PSScriptRoot "launcher"
+$launcherExe = Join-Path $launcherDir "neovide-launcher.exe"
+if (-not (Test-Path $launcherExe)) {
+    $buildBat = Join-Path $launcherDir "build.bat"
+    if (Test-Path $buildBat) {
+        Write-Host "Building C neovide-launcher.exe..." -ForegroundColor Cyan
+        & cmd.exe /c "`"$buildBat`""
+    }
+}
+
+$cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
+$cmdExeReg = ConvertTo-RegString $cmdExe
+
 $outputDirectory = $PSScriptRoot
 if (-not $outputDirectory) {
     $outputDirectory = (Get-Location).Path
@@ -280,7 +294,7 @@ $installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovi
 $installAssociations.Add('@="' + $exeReg + ',0"')
 $installAssociations.Add('')
 $installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]')
-$installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
+$installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 $installAssociations.Add('')
 $installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\SupportedTypes]')
 foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
@@ -310,7 +324,7 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $installAssociations.Add('@="' + $exeReg + ',0"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
-    $installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
+    $installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 
     # Explorer FileExts MRU binding (prevents "How do you want to open this file?" dialog)
     $installAssociations.Add('')
@@ -343,7 +357,7 @@ $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovi
 $installContext.Add('@="Open with Neovide"')
 $installContext.Add('"Icon"="' + $exeReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $exeReg + '\" \"%1\""')
+$installContext.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 
 # Right-click a folder.
 $installContext.Add('')
@@ -351,7 +365,7 @@ $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open wi
 $installContext.Add('@="Open with Neovide"')
 $installContext.Add('"Icon"="' + $exeReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $exeReg + '\" \"%1\""')
+$installContext.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 
 # Right-click the background inside a folder.
 $installContext.Add('')
@@ -359,7 +373,7 @@ $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\sh
 $installContext.Add('@="Open with Neovide"')
 $installContext.Add('"Icon"="' + $exeReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $exeReg + '\" \"%V\""')
+$installContext.Add('@="\"' + $cmdExeReg + '\" \"%V\""')
 
 $uninstallContext.Add('')
 $uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
