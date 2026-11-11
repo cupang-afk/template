@@ -123,7 +123,7 @@ return {
       float = {
         window_border = "none",
         margin = {
-          right = 2, -- leave space on right edge for satellite scrollbar
+          right = 1, -- leave space on right edge for satellite scrollbar
         },
       },
     },
