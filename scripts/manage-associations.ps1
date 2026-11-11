@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$NeovidePath
+    [string]$NeovidePath,
+    [Parameter()]
+    [switch]$Import
 )
 
 $ErrorActionPreference = 'Stop'
@@ -269,12 +271,36 @@ $uninstallAssociations.Add('Windows Registry Editor Version 5.00')
 $installContext.Add('Windows Registry Editor Version 5.00')
 $uninstallContext.Add('Windows Registry Editor Version 5.00')
 
+# Portable application registration & icon definition
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
+$installAssociations.Add('"FriendlyAppName"="Neovide"')
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]')
+$installAssociations.Add('@="' + $exeReg + ',0"')
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]')
+$installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\SupportedTypes]')
+foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
+    $installAssociations.Add('".' + $extension + '"=""')
+}
+
+$uninstallAssociations.Add('')
+$uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
+
 foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $progId = "Neovide.$extension"
     $description = ConvertTo-RegString $FileTypes[$extension]
 
+    # File class mapping to Application handler
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension]")
+    $installAssociations.Add('@="Applications\\neovide.exe"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+    $installAssociations.Add('"Applications\\neovide.exe"=""')
     $installAssociations.Add('"' + $progId + '"=""')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId]")
@@ -286,26 +312,30 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
     $installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
 
+    # Explorer FileExts MRU binding (prevents "How do you want to open this file?" dialog)
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
+    $installAssociations.Add('"a"="neovide.exe"')
+    $installAssociations.Add('"MRUList"="a"')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
+    $installAssociations.Add('"Applications\\neovide.exe"=hex(0):')
+
+    # Uninstallation entries
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+    $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
     $uninstallAssociations.Add('"' + $progId + '"=-')
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\$progId]")
+    $uninstallAssociations.Add('')
+    $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
+    $uninstallAssociations.Add('"a"=-')
+    $uninstallAssociations.Add('"MRUList"=-')
+    $uninstallAssociations.Add('')
+    $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
+    $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
 }
-
-# Application registration for Open With and DefaultIcon fallback
-$installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
-$installAssociations.Add('"FriendlyAppName"="Neovide"')
-$installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]')
-$installAssociations.Add('@="' + $exeReg + ',0"')
-$installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]')
-$installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
-
-$uninstallAssociations.Add('')
-$uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
 
 # Right-click a file.
 $installContext.Add('')
@@ -349,13 +379,29 @@ foreach ($name in $files.Keys) {
     [IO.File]::WriteAllText($path, $content, [Text.Encoding]::Unicode)
 }
 
+# Invalidate Windows Explorer icon & association cache
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ShellRefresh {
+    [DllImport("shell32.dll")]
+    public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+}
+'@ -ErrorAction SilentlyContinue
+[ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+
 Write-Host ''
 Write-Host "Neovide found: $exe" -ForegroundColor Green
 Write-Host "Generated registry files in: $outputDirectory" -ForegroundColor Green
 Write-Host ''
-Write-Host 'Import install-associations.reg and install-context.reg to install.'
-Write-Host 'Import the corresponding uninstall files to remove the entries.'
-Write-Host ''
-Write-Host 'Note: Windows does not let ordinary registry files choose the default'
-Write-Host 'app for each extension. Use Open with > Choose another app > Always'
-Write-Host 'open with this app if you also want double-click to launch Neovide.'
+
+if ($Import) {
+    Write-Host 'Importing associations and context menu...' -ForegroundColor Cyan
+    Start-Process reg.exe -ArgumentList "import `"`"$outputDirectory\install-associations.reg`"`"" -Wait -NoNewWindow
+    Start-Process reg.exe -ArgumentList "import `"`"$outputDirectory\install-context.reg`"`"" -Wait -NoNewWindow
+    [ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+    Write-Host 'Registry entries successfully imported.' -ForegroundColor Green
+} else {
+    Write-Host 'Import install-associations.reg and install-context.reg to apply.'
+    Write-Host 'Or run with -Import to apply automatically.'
+}
