@@ -156,36 +156,13 @@ $FileTypes = @{
 function Find-Neovide {
     param([string]$ExplicitPath)
 
-    function Unwrap-Target {
-        param([string]$Path)
-        if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
-        $resolved = (Resolve-Path -LiteralPath $Path).Path
-        # Exclude Scoop shims: resolve companion .shim target binary
-        $shim = [IO.Path]::ChangeExtension($resolved, '.shim')
-        if (Test-Path -LiteralPath $shim -PathType Leaf) {
-            $lines = Get-Content -LiteralPath $shim -ErrorAction SilentlyContinue
-            foreach ($line in $lines) {
-                if ($line -match '^\s*path\s*=\s*["'']?([^"'']+)["'']?') {
-                    $target = $Matches[1].Trim()
-                    if (Test-Path -LiteralPath $target -PathType Leaf) {
-                        return (Resolve-Path -LiteralPath $target).Path
-                    }
-                }
-            }
-            return $null
-        }
-        if ([IO.Path]::GetFileName($resolved) -ieq 'neovide.exe') {
-            return $resolved
-        }
-        return $null
-    }
-
     if ($ExplicitPath) {
-        $real = Unwrap-Target $ExplicitPath
-        if ($real) {
-            return $real
+        $candidate = (Resolve-Path -LiteralPath $ExplicitPath -ErrorAction Stop).Path
+        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
+            ([IO.Path]::GetFileName($candidate) -ieq 'neovide.exe')) {
+            return $candidate
         }
-        throw "The specified path is not a valid neovide.exe binary: $ExplicitPath"
+        throw "The specified path is not a valid neovide.exe: $ExplicitPath"
     }
 
     $raw = @()
@@ -222,13 +199,16 @@ function Find-Neovide {
         }
     }
 
-    # 5. Filter out shims, validate leaf binary, deduplicate
+    # 5. Filter: must exist, named neovide.exe, deduplicate
     $candidates = [System.Collections.Generic.List[string]]::new()
     foreach ($item in $raw) {
         if (-not $item) { continue }
-        $clean = Unwrap-Target $item.Trim()
-        if ($clean -and -not $candidates.Contains($clean)) {
-            $candidates.Add($clean)
+        $trimmed = $item.Trim()
+        if (-not (Test-Path -LiteralPath $trimmed -PathType Leaf)) { continue }
+        if ([IO.Path]::GetFileName($trimmed) -ine 'neovide.exe') { continue }
+        $resolved = (Resolve-Path -LiteralPath $trimmed).Path
+        if (-not $candidates.Contains($resolved)) {
+            $candidates.Add($resolved)
         }
     }
 
@@ -249,19 +229,18 @@ function Find-Neovide {
         }
     }
 
-    # 0 found or user chose to browse
+    # 0 found or user pressed Enter
     Add-Type -AssemblyName System.Windows.Forms
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.Title = 'Select neovide.exe binary (not a shim)'
+    $dialog.Title = 'Select neovide.exe'
     $dialog.Filter = 'Neovide executable (neovide.exe)|neovide.exe'
     $dialog.FileName = 'neovide.exe'
     $dialog.CheckFileExists = $true
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-        $picked = Unwrap-Target $dialog.FileName
-        if ($picked) {
-            return $picked
+        if ([IO.Path]::GetFileName($dialog.FileName) -ieq 'neovide.exe') {
+            return (Resolve-Path -LiteralPath $dialog.FileName).Path
         }
-        throw 'The selected file is a shim or invalid binary.'
+        throw 'The selected file is not named neovide.exe.'
     }
 
     throw 'Neovide was not located. Provide -NeovidePath.'
