@@ -23,6 +23,7 @@ return {
         "vue",
         "toml",
         "yaml",
+        "latex",
       },
     },
   },
