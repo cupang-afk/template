@@ -31,9 +31,11 @@ if (-not $neovidePath -or -not (Test-Path $neovidePath)) {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $installReg = Join-Path $scriptDir "neovide-install.reg"
 $uninstallReg = Join-Path $scriptDir "neovide-uninstall.reg"
+$openBat = Join-Path $scriptDir "neovide-open.bat"
 
 # Escape backslashes for .reg file format
 $escapedExe = $neovidePath.Replace('\', '\\')
+$escapedBat = $openBat.Replace('\', '\\')
 
 # List of 143 code/markup/data file extensions matching VS Code associations
 $extensions = @(
@@ -64,21 +66,21 @@ $installSb = [System.Text.StringBuilder]::new()
 [void]$installSb.AppendLine('@="Open with &Neovide"')
 [void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
 [void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with &Neovide\command]")
-    [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
+    [void]$installSb.AppendLine(('"@"="\"' + $escapedBat + '\" \"%1\""'))
     [void]$installSb.AppendLine("")
 
     [void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide]")
     [void]$installSb.AppendLine('@="Open with &Neovide"')
     [void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
     [void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide\command]")
-    [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%V\""'))
+    [void]$installSb.AppendLine(('"@"="\"' + $escapedBat + '\" \"%V\""'))
     [void]$installSb.AppendLine("")
 
     [void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide]")
     [void]$installSb.AppendLine('@="Open with &Neovide"')
     [void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
     [void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide\command]")
-    [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%V\""'))
+    [void]$installSb.AppendLine(('"@"="\"' + $escapedBat + '\" \"%V\""'))
     [void]$installSb.AppendLine("")
 
     # File Associations
@@ -106,7 +108,7 @@ $installSb = [System.Text.StringBuilder]::new()
         [void]$installSb.AppendLine("")
 
         [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $progId + "\shell\open\command]"))
-        [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
+        [void]$installSb.AppendLine(('"@"="\"' + $escapedBat + '\" \"%1\""'))
         [void]$installSb.AppendLine("")
     }
 
