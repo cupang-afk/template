@@ -10,9 +10,12 @@ if not exist "%PS_SCRIPT%" (
     exit /b 1
 )
 
-set ACTION=%1
-if "%ACTION%"=="" set ACTION=install
+set NEOVIDE_PATH=%~1
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Action %ACTION%
+if "%NEOVIDE_PATH%"=="" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
+) else (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -NeovidePath "%NEOVIDE_PATH%"
+)
 
 endlocal
