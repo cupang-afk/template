@@ -121,6 +121,7 @@ return {
     "Isrothy/neominimap.nvim",
     opts = {
       float = {
+        window_border = "none",
         margin = {
           right = 2, -- leave space on right edge for satellite scrollbar
         },
