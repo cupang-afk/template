@@ -167,68 +167,44 @@ function Find-Neovide {
         throw "The specified path is not a valid neovide.exe: $ExplicitPath"
     }
 
-    $raw = @()
-
-    # 1. Portable layout: beside script or in subfolders
-    if ($PSScriptRoot) {
-        $raw += Join-Path $PSScriptRoot 'neovide.exe'
-        $raw += @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'neovide.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
-    }
-
-    # 2. PATH via where.exe
-    $whereHits = where.exe neovide 2>$null
-    if ($whereHits) {
-        $raw += ($whereHits -split "`r?`n")
-    }
-
-    # 3. Known installation locations
-    $raw += @(
-        'F:\generic\scoop\apps\neovide\current\neovide.exe',
-        "$env:USERPROFILE\scoop\apps\neovide\current\neovide.exe",
-        "$env:ProgramFiles\Neovide\neovide.exe",
-        "${env:ProgramFiles(x86)}\Neovide\neovide.exe",
-        "$env:LOCALAPPDATA\Programs\Neovide\neovide.exe"
-    )
-
-    # 4. Windows App Paths
-    $appPathKeys = @(
-        'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe',
-        'HKLM:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe'
-    )
-    foreach ($key in $appPathKeys) {
-        if (Test-Path $key) {
-            $raw += (Get-Item $key).GetValue('')
-        }
-    }
-
-    # 5. Filter: must exist, named neovide.exe, deduplicate
+    # Locate via where.exe
     $candidates = [System.Collections.Generic.List[string]]::new()
-    foreach ($item in $raw) {
-        if (-not $item) { continue }
-        $trimmed = $item.Trim()
-        if (-not (Test-Path -LiteralPath $trimmed -PathType Leaf)) { continue }
-        if ([IO.Path]::GetFileName($trimmed) -ine 'neovide.exe') { continue }
-        $resolved = (Resolve-Path -LiteralPath $trimmed).Path
-        if (-not $candidates.Contains($resolved)) {
-            $candidates.Add($resolved)
+    $whereHits = where.exe neovide.exe 2>$null
+    if ($whereHits) {
+        foreach ($hit in ($whereHits -split "`r?`n")) {
+            $trimmed = $hit.Trim()
+            if (-not $trimmed) { continue }
+            if (-not (Test-Path -LiteralPath $trimmed -PathType Leaf)) { continue }
+            $resolved = (Resolve-Path -LiteralPath $trimmed).Path
+            if (-not $candidates.Contains($resolved)) {
+                $candidates.Add($resolved)
+            }
         }
     }
 
     # Selection logic
-    if ($candidates.Count -eq 1) {
-        return $candidates[0]
-    }
+    $manual = $null
 
-    if ($candidates.Count -gt 1) {
-        Write-Host 'Multiple Neovide executables found:' -ForegroundColor Cyan
+    if ($candidates.Count -gt 0) {
+        Write-Host 'Neovide executables found:' -ForegroundColor Cyan
         for ($i = 0; $i -lt $candidates.Count; $i++) {
             Write-Host ("[{0}] {1}" -f ($i + 1), $candidates[$i])
         }
-        $selection = Read-Host ("Select executable [1-{0}] or press Enter to browse" -f $candidates.Count)
+        $selection = Read-Host ("Select [1-{0}], type a full path, or press Enter to browse" -f $candidates.Count)
+        $selection = "$selection".Trim().Trim('"')
         $num = 0
         if ([int]::TryParse($selection, [ref]$num) -and $num -ge 1 -and $num -le $candidates.Count) {
             return $candidates[$num - 1]
         }
+        $manual = $selection
+    } else {
+        $manual = Read-Host 'Enter full path to neovide.exe, or press Enter to browse'
+        $manual = "$manual".Trim().Trim('"')
+    }
+
+    if ($manual -and (Test-Path -LiteralPath $manual -PathType Leaf) -and
+        ([IO.Path]::GetFileName($manual) -ieq 'neovide.exe')) {
+        return (Resolve-Path -LiteralPath $manual).Path
     }
 
     # 0 found or user pressed Enter
@@ -253,28 +229,71 @@ function ConvertTo-RegString {
     return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
+function Test-HasIcon {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not ('IconProbe' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class IconProbe {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ExtractIconEx(string file, int index, IntPtr[] large, IntPtr[] small, int count);
+    [DllImport("user32.dll")]
+    public static extern bool DestroyIcon(IntPtr handle);
+}
+'@
+    }
+
+    $large = New-Object IntPtr[] 1
+    $small = New-Object IntPtr[] 1
+    $count = [IconProbe]::ExtractIconEx($Path, 0, $large, $small, 1)
+    foreach ($handle in @($large[0], $small[0])) {
+        if ($handle -ne [IntPtr]::Zero) {
+            [IconProbe]::DestroyIcon($handle) | Out-Null
+        }
+    }
+    return $count -gt 0
+}
+
 $exe = Find-Neovide -ExplicitPath $NeovidePath
 $exeReg = ConvertTo-RegString $exe
 
-# Check for custom C single-instance launcher
-$launcherDir = Join-Path $PSScriptRoot "launcher"
-$launcherExe = Join-Path $launcherDir "neovide-launcher.exe"
+# Check for the single-instance launcher.
+$launcherDir = Join-Path $PSScriptRoot 'launcher'
+$launcherExe = Join-Path $launcherDir 'neovide-launcher.exe'
 if (-not (Test-Path $launcherExe)) {
-    $buildBat = Join-Path $launcherDir "build.bat"
+    $buildBat = Join-Path $launcherDir 'build.bat'
     if (Test-Path $buildBat) {
-        Write-Host "Building C neovide-launcher.exe..." -ForegroundColor Cyan
+        Write-Host 'Building neovide-launcher.exe...' -ForegroundColor Cyan
         & cmd.exe /c "`"$buildBat`""
     }
+}
+if (-not (Test-Path $launcherExe)) {
+    Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\launcher\build.bat <compiler>.'
 }
 
 $cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
 $cmdExeReg = ConvertTo-RegString $cmdExe
 $cmdExeName = [IO.Path]::GetFileName($cmdExe)
 
-$outputDirectory = $PSScriptRoot
-if (-not $outputDirectory) {
-    $outputDirectory = (Get-Location).Path
+# Icon: use the selected neovide.exe if it has an icon; otherwise fall back to the launcher.
+$iconExe = if (Test-HasIcon $exe) { $exe } else { $cmdExe }
+$iconReg = ConvertTo-RegString $iconExe
+
+# When the launcher is used, pass the resolved neovide.exe path as its first argument.
+$launchCommand = if ($cmdExe -eq $launcherExe) {
+    '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%1\""'
+} else {
+    '@="\"' + $cmdExeReg + '\" \"%1\""'
 }
+$launchFolderCommand = if ($cmdExe -eq $launcherExe) {
+    '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%V\""'
+} else {
+    '@="\"' + $cmdExeReg + '\" \"%V\""'
+}
+
+$outputDirectory = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 
 $installAssociations = [System.Collections.Generic.List[string]]::new()
 $uninstallAssociations = [System.Collections.Generic.List[string]]::new()
@@ -292,10 +311,10 @@ $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdE
 $installAssociations.Add('"FriendlyAppName"="Neovide"')
 $installAssociations.Add('')
 $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\DefaultIcon]")
-$installAssociations.Add('@="' + $exeReg + ',0"')
+$installAssociations.Add('@="' + $iconReg + ',0"')
 $installAssociations.Add('')
 $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\shell\open\command]")
-$installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
+$installAssociations.Add($launchCommand)
 $installAssociations.Add('')
 $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\SupportedTypes]")
 foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
@@ -304,6 +323,7 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
 
 $uninstallAssociations.Add('')
 $uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
+# Clean up application keys written by older versions of this script.
 $uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
 $uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide-launcher.exe]')
 
@@ -324,10 +344,10 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $installAssociations.Add('@="' + $description + '"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\DefaultIcon]")
-    $installAssociations.Add('@="' + $exeReg + ',0"')
+    $installAssociations.Add('@="' + $iconReg + ',0"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
-    $installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
+    $installAssociations.Add($launchCommand)
 
     # Explorer FileExts MRU binding (matches executable name exactly)
     $installAssociations.Add('')
@@ -364,25 +384,25 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
 $installContext.Add('')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
 $installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('"Icon"="' + $iconReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
+$installContext.Add($launchCommand)
 
 # Right-click a folder.
 $installContext.Add('')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
 $installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('"Icon"="' + $iconReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
+$installContext.Add($launchCommand)
 
 # Right-click the background inside a folder.
 $installContext.Add('')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
 $installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('"Icon"="' + $iconReg + ',0"')
 $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
-$installContext.Add('@="\"' + $cmdExeReg + '\" \"%V\""')
+$installContext.Add($launchFolderCommand)
 
 $uninstallContext.Add('')
 $uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
@@ -402,17 +422,6 @@ foreach ($name in $files.Keys) {
     [IO.File]::WriteAllText($path, $content, [Text.Encoding]::Unicode)
 }
 
-# Invalidate Windows Explorer icon & association cache
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class ShellRefresh {
-    [DllImport("shell32.dll")]
-    public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
-}
-'@ -ErrorAction SilentlyContinue
-[ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
-
 Write-Host ''
 Write-Host "Neovide found: $exe" -ForegroundColor Green
 Write-Host "Generated registry files in: $outputDirectory" -ForegroundColor Green
@@ -420,8 +429,20 @@ Write-Host ''
 
 if ($Import) {
     Write-Host 'Importing associations and context menu...' -ForegroundColor Cyan
-    Start-Process reg.exe -ArgumentList "import `"`"$outputDirectory\install-associations.reg`"`"" -Wait -NoNewWindow
-    Start-Process reg.exe -ArgumentList "import `"`"$outputDirectory\install-context.reg`"`"" -Wait -NoNewWindow
+    Start-Process reg.exe -ArgumentList "import `"$outputDirectory\install-associations.reg`"" -Wait -NoNewWindow
+    Start-Process reg.exe -ArgumentList "import `"$outputDirectory\install-context.reg`"" -Wait -NoNewWindow
+
+    # Invalidate Windows Explorer icon & association cache.
+    if (-not ('ShellRefresh' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ShellRefresh {
+    [DllImport("shell32.dll")]
+    public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+}
+'@
+    }
     [ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
     Write-Host 'Registry entries successfully imported.' -ForegroundColor Green
 } else {
