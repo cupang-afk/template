@@ -112,5 +112,6 @@ return {
   { import = "astrocommunity.recipes.cache-colorscheme" },
   { import = "astrocommunity.git.diffview-nvim" },
   { import = "astrocommunity.icon.mini-icons" },
+  { import = "astrocommunity.editing-support.treesj" },
   -- import/override with your plugins folder
 }
