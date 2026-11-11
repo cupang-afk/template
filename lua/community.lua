@@ -111,5 +111,6 @@ return {
   { import = "astrocommunity.recipes.neovide" },
   { import = "astrocommunity.recipes.cache-colorscheme" },
   { import = "astrocommunity.git.diffview-nvim" },
+  { import = "astrocommunity.icon.mini-icons" },
   -- import/override with your plugins folder
 }
