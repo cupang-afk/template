@@ -156,109 +156,115 @@ $FileTypes = @{
 function Find-Neovide {
     param([string]$ExplicitPath)
 
+    function Unwrap-Target {
+        param([string]$Path)
+        if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+        $resolved = (Resolve-Path -LiteralPath $Path).Path
+        # Exclude Scoop shims: resolve companion .shim target binary
+        $shim = [IO.Path]::ChangeExtension($resolved, '.shim')
+        if (Test-Path -LiteralPath $shim -PathType Leaf) {
+            $lines = Get-Content -LiteralPath $shim -ErrorAction SilentlyContinue
+            foreach ($line in $lines) {
+                if ($line -match '^\s*path\s*=\s*["'']?([^"'']+)["'']?') {
+                    $target = $Matches[1].Trim()
+                    if (Test-Path -LiteralPath $target -PathType Leaf) {
+                        return (Resolve-Path -LiteralPath $target).Path
+                    }
+                }
+            }
+            return $null
+        }
+        if ([IO.Path]::GetFileName($resolved) -ieq 'neovide.exe') {
+            return $resolved
+        }
+        return $null
+    }
+
     if ($ExplicitPath) {
-        $candidate = (Resolve-Path -LiteralPath $ExplicitPath -ErrorAction Stop).Path
-        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
-            ([IO.Path]::GetFileName($candidate) -ieq 'neovide.exe')) {
-            return $candidate
+        $real = Unwrap-Target $ExplicitPath
+        if ($real) {
+            return $real
         }
-        throw "The specified path is not neovide.exe: $ExplicitPath"
+        throw "The specified path is not a valid neovide.exe binary: $ExplicitPath"
     }
 
-    # 1. Portable layout: neovide.exe beside script.
+    $raw = @()
+
+    # 1. Portable layout: beside script or in subfolders
     if ($PSScriptRoot) {
-        $besideScript = Join-Path $PSScriptRoot 'neovide.exe'
-        if (Test-Path -LiteralPath $besideScript -PathType Leaf) {
-            return (Resolve-Path -LiteralPath $besideScript).Path
-        }
-
-        # 2. Portable layout: neovide.exe in subfolder of script's directory.
-        $nearby = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'neovide.exe' -File -Recurse -ErrorAction SilentlyContinue)
-        if ($nearby.Count -eq 1) {
-            return $nearby[0].FullName
-        }
-        if ($nearby.Count -gt 1) {
-            Write-Host 'Multiple Neovide executables found near this script:'
-            for ($i = 0; $i -lt $nearby.Count; $i++) {
-                Write-Host ("[{0}] {1}" -f ($i + 1), $nearby[$i].FullName)
-            }
-            $selection = Read-Host 'Enter the number to use, or press Enter to browse'
-            $number = 0
-            if ([int]::TryParse($selection, [ref]$number) -and $number -ge 1 -and $number -le $nearby.Count) {
-                return $nearby[$number - 1].FullName
-            }
-        }
+        $raw += Join-Path $PSScriptRoot 'neovide.exe'
+        $raw += @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'neovide.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
     }
 
-    # 3. PATH (includes package-manager shims such as Scoop when configured).
-    $command = Get-Command 'neovide.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($command -and $command.Source -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
-        return (Resolve-Path -LiteralPath $command.Source).Path
+    # 2. PATH via where.exe
+    $whereHits = where.exe neovide 2>$null
+    if ($whereHits) {
+        $raw += ($whereHits -split "`r?`n")
     }
 
-    # 4. Windows App Paths registration.
+    # 3. Known installation locations
+    $raw += @(
+        'F:\generic\scoop\apps\neovide\current\neovide.exe',
+        "$env:USERPROFILE\scoop\apps\neovide\current\neovide.exe",
+        "$env:ProgramFiles\Neovide\neovide.exe",
+        "${env:ProgramFiles(x86)}\Neovide\neovide.exe",
+        "$env:LOCALAPPDATA\Programs\Neovide\neovide.exe"
+    )
+
+    # 4. Windows App Paths
     $appPathKeys = @(
         'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe',
         'HKLM:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe'
     )
     foreach ($key in $appPathKeys) {
         if (Test-Path $key) {
-            $value = (Get-Item $key).GetValue('')
-            if ($value -and (Test-Path -LiteralPath $value -PathType Leaf)) {
-                return (Resolve-Path -LiteralPath $value).Path
-            }
+            $raw += (Get-Item $key).GetValue('')
         }
     }
 
-    # 5. Ask user to locate portable executable.
+    # 5. Filter out shims, validate leaf binary, deduplicate
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($item in $raw) {
+        if (-not $item) { continue }
+        $clean = Unwrap-Target $item.Trim()
+        if ($clean -and -not $candidates.Contains($clean)) {
+            $candidates.Add($clean)
+        }
+    }
+
+    # Selection logic
+    if ($candidates.Count -eq 1) {
+        return $candidates[0]
+    }
+
+    if ($candidates.Count -gt 1) {
+        Write-Host 'Multiple Neovide executables found:' -ForegroundColor Cyan
+        for ($i = 0; $i -lt $candidates.Count; $i++) {
+            Write-Host ("[{0}] {1}" -f ($i + 1), $candidates[$i])
+        }
+        $selection = Read-Host ("Select executable [1-{0}] or press Enter to browse" -f $candidates.Count)
+        $num = 0
+        if ([int]::TryParse($selection, [ref]$num) -and $num -ge 1 -and $num -le $candidates.Count) {
+            return $candidates[$num - 1]
+        }
+    }
+
+    # 0 found or user chose to browse
     Add-Type -AssemblyName System.Windows.Forms
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.Title = 'Select neovide.exe'
-    $dialog.Filter = 'Neovide executable (neovide.exe)|neovide.exe|Executable files (*.exe)|*.exe'
+    $dialog.Title = 'Select neovide.exe binary (not a shim)'
+    $dialog.Filter = 'Neovide executable (neovide.exe)|neovide.exe'
     $dialog.FileName = 'neovide.exe'
     $dialog.CheckFileExists = $true
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-        if ([IO.Path]::GetFileName($dialog.FileName) -ine 'neovide.exe') {
-            throw 'Selected file is not named neovide.exe.'
+        $picked = Unwrap-Target $dialog.FileName
+        if ($picked) {
+            return $picked
         }
-        return (Resolve-Path -LiteralPath $dialog.FileName).Path
+        throw 'The selected file is a shim or invalid binary.'
     }
 
-    throw 'Neovide could not be located. Run again and provide -NeovidePath.'
-}
-
-function Resolve-RealExecutable {
-    param([string]$Path)
-
-    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return $Path
-    }
-
-    # Scoop shim companion .shim contains target binary with icons
-    $shim = [IO.Path]::ChangeExtension($Path, '.shim')
-    if (Test-Path -LiteralPath $shim -PathType Leaf) {
-        $shimContent = Get-Content -LiteralPath $shim -ErrorAction SilentlyContinue
-        foreach ($line in $shimContent) {
-            if ($line -match '^\s*path\s*=\s*["'']?([^"'']+)["'']?') {
-                $target = $Matches[1].Trim()
-                if (Test-Path -LiteralPath $target -PathType Leaf) {
-                    return (Resolve-Path -LiteralPath $target).Path
-                }
-            }
-        }
-    }
-
-    # Symlink / reparse point
-    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
-    if ($item.Target) {
-        $target = $item.Target
-        if ($target -is [array]) { $target = $target[0] }
-        if (Test-Path -LiteralPath $target -PathType Leaf) {
-            return (Resolve-Path -LiteralPath $target).Path
-        }
-    }
-
-    return (Resolve-Path -LiteralPath $Path).Path
+    throw 'Neovide was not located. Provide -NeovidePath.'
 }
 
 function ConvertTo-RegString {
@@ -266,7 +272,7 @@ function ConvertTo-RegString {
     return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
-$exe = Resolve-RealExecutable (Find-Neovide -ExplicitPath $NeovidePath)
+$exe = Find-Neovide -ExplicitPath $NeovidePath
 $exeReg = ConvertTo-RegString $exe
 
 $outputDirectory = $PSScriptRoot
