@@ -1,0 +1,6 @@
+# Generated registry files
+*.reg
+scripts/*.reg
+
+# Plugin lockfile
+lazy-lock.json
