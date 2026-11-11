@@ -55,18 +55,20 @@ return {
   {
     "milanglacier/minuet-ai.nvim",
     opts = {
-      provider = "codestral",
+      provider = "openai_fim_compatible",
       n_completions = 1,
-      throttle = 3000, -- 3s between requests to strictly respect Mistral free-tier 1 RPS & burst caps
-      debounce = 1000, -- 1s idle after typing stops before triggering
+      throttle = 200,
+      debounce = 150,
       provider_options = {
-        codestral = {
-          model = "codestral-2508",
-          end_point = "https://api.mistral.ai/v1/fim/completions",
-          api_key = "MISTRAL_KEY",
+        openai_fim_compatible = {
+          model = "gkd 1.5b production production distilled rerun no denoise v2|Q8_0|1537269856",
+          end_point = "http://127.0.0.1:6996/v1/completions",
+          api_key = "TERM",
+          name = "TurboLLM",
+          stream = true,
           optional = {
             max_tokens = 256,
-            stop = { "\n\n" },
+            stop = { "<|file_sep|>", "<|endoftext|>", "\n\n" },
           },
         },
       },
