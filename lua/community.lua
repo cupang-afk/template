@@ -63,7 +63,7 @@ return {
         openai_fim_compatible = {
           model = "gkd 1.5b production production distilled rerun no denoise v2|Q8_0|1537269856",
           end_point = "http://127.0.0.1:6996/v1/completions",
-          api_key = "TERM",
+          api_key = function() return "dummy" end,
           name = "TurboLLM",
           stream = true,
           optional = {
