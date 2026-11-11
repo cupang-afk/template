@@ -1,192 +1,328 @@
+[CmdletBinding()]
 param(
-    [Parameter(Position = 0)]
-    [ValidateSet("install", "uninstall", "generate")]
-    [string]$Action = "install"
+    [Parameter()]
+    [string]$NeovidePath
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 
-# 1. Dynamically locate neovide.exe binary
-$neovidePath = $null
+# File types copied from supplied VS Code association list.
+$FileTypes = @{
+    'ascx'           = 'ASCX Source File'
+    'asp'            = 'ASP Source File'
+    'aspx'           = 'ASPX Source File'
+    'bash'           = 'Bash Source File'
+    'bash_login'     = 'Bash Login Source File'
+    'bash_logout'    = 'Bash Logout Source File'
+    'bash_profile'   = 'Bash Profile Source File'
+    'bashrc'         = 'Bash RC Source File'
+    'bib'            = 'BibTeX Source File'
+    'bowerrc'        = 'Bower RC Source File'
+    'c'              = 'C Source File'
+    'c++'            = 'C++ Source File'
+    'cc'             = 'C++ Source File'
+    'cfg'            = 'Configuration Source File'
+    'cjs'            = 'JavaScript Source File'
+    'clj'            = 'Clojure Source File'
+    'cljs'           = 'ClojureScript Source File'
+    'cljx'           = 'CLJX Source File'
+    'clojure'        = 'Clojure Source File'
+    'cls'            = 'LaTeX Source File'
+    'cmake'          = 'CMake Source File'
+    'code-workspace' = 'Code Workspace Source File'
+    'coffee'         = 'CoffeeScript Source File'
+    'config'         = 'Configuration Source File'
+    'containerfile'  = 'Containerfile Source File'
+    'cpp'            = 'C++ Source File'
+    'cs'             = 'C# Source File'
+    'cshtml'         = 'CSHTML Source File'
+    'csproj'         = 'C# Project Source File'
+    'css'            = 'CSS Source File'
+    'csv'            = 'Comma Separated Values Source File'
+    'csx'            = 'C# Script Source File'
+    'ctp'            = 'CakePHP Template Source File'
+    'cxx'            = 'C++ Source File'
+    'dart'           = 'Dart Source File'
+    'diff'           = 'Diff Source File'
+    'dockerfile'     = 'Dockerfile Source File'
+    'dot'            = 'Dot Source File'
+    'dtd'            = 'Document Type Definition Source File'
+    'editorconfig'   = 'Editor Config Source File'
+    'edn'            = 'Extensible Data Notation Source File'
+    'erb'            = 'Ruby Source File'
+    'eyaml'          = 'Hiera Eyaml Source File'
+    'eyml'           = 'Hiera Eyaml Source File'
+    'fs'             = 'F# Source File'
+    'fsi'            = 'F# Signature Source File'
+    'fsscript'       = 'F# Script Source File'
+    'fsx'            = 'F# Script Source File'
+    'gemspec'        = 'Gemspec Source File'
+    'gitattributes'  = 'Git Attributes Source File'
+    'gitconfig'      = 'Git Config Source File'
+    'gitignore'      = 'Git Ignore Source File'
+    'go'             = 'Go Source File'
+    'gradle'         = 'Gradle Source File'
+    'groovy'         = 'Groovy Source File'
+    'h'              = 'C Header Source File'
+    'h++'            = 'C++ Header Source File'
+    'handlebars'     = 'Handlebars Source File'
+    'hbs'            = 'Handlebars Source File'
+    'hh'             = 'C++ Header Source File'
+    'hpp'            = 'C++ Header Source File'
+    'htm'            = 'HTML Source File'
+    'html'           = 'HTML Source File'
+    'hxx'            = 'C++ Header Source File'
+    'ini'            = 'INI Source File'
+    'ipynb'          = 'Jupyter Source File'
+    'jade'           = 'Jade Source File'
+    'jav'            = 'Java Source File'
+    'java'           = 'Java Source File'
+    'js'             = 'JavaScript Source File'
+    'jscsrc'         = 'JSCS RC Source File'
+    'jshintrc'       = 'JSHint RC Source File'
+    'jshtm'          = 'JavaScript HTML Template Source File'
+    'json'           = 'JSON Source File'
+    'jsp'            = 'Java Server Pages Source File'
+    'jsx'            = 'JavaScript Source File'
+    'less'           = 'LESS Source File'
+    'log'            = 'Log file Source File'
+    'lua'            = 'Lua Source File'
+    'm'              = 'Objective C Source File'
+    'makefile'       = 'Makefile Source File'
+    'markdown'       = 'Markdown Source File'
+    'md'             = 'Markdown Source File'
+    'mdoc'           = 'MDoc Source File'
+    'mdown'          = 'Markdown Source File'
+    'mdtext'         = 'Markdown Source File'
+    'mdtxt'          = 'Markdown Source File'
+    'mdwn'           = 'Markdown Source File'
+    'mjs'            = 'JavaScript Source File'
+    'mk'             = 'Makefile Source File'
+    'mkd'            = 'Markdown Source File'
+    'mkdn'           = 'Markdown Source File'
+    'ml'             = 'OCaml Source File'
+    'mli'            = 'OCaml Source File'
+    'npmignore'      = 'NPM Ignore Source File'
+    'php'            = 'PHP Source File'
+    'phtml'          = 'PHP HTML Source File'
+    'pl'             = 'Perl Source File'
+    'pl6'            = 'Perl 6 Source File'
+    'plist'          = 'Properties file Source File'
+    'pm'             = 'Perl Module Source File'
+    'pm6'            = 'Perl 6 Module Source File'
+    'pod'            = 'Perl POD Source File'
+    'pp'             = 'Perl Source File'
+    'profile'        = 'Profile Source File'
+    'properties'     = 'Properties Source File'
+    'ps1'            = 'PowerShell Source File'
+    'psd1'           = 'PowerShell Module Manifest Source File'
+    'psgi'           = 'Perl CGI Source File'
+    'psm1'           = 'PowerShell Module Source File'
+    'py'             = 'Python Source File'
+    'pyi'            = 'Python Source File'
+    'r'              = 'R Source File'
+    'rb'             = 'Ruby Source File'
+    'rhistory'       = 'R History Source File'
+    'rprofile'       = 'R Profile Source File'
+    'rs'             = 'Rust Source File'
+    'rst'            = 'Restructured Text Source File'
+    'rt'             = 'Rich Text Source File'
+    'sass'           = 'Sass Source File'
+    'scss'           = 'Sass Source File'
+    'sh'             = 'SH Source File'
+    'shtml'          = 'SHTML Source File'
+    'sql'            = 'SQL Source File'
+    'svg'            = 'SVG Source File'
+    'svgz'           = 'SVGZ Source File'
+    't'              = 'Perl Source File'
+    'tex'            = 'LaTeX Source File'
+    'toml'           = 'Toml Source File'
+    'ts'             = 'TypeScript Source File'
+    'tsx'            = 'TypeScript Source File'
+    'txt'            = 'Text Source File'
+    'vb'             = 'Visual Basic Source File'
+    'vue'            = 'VUE Source File'
+    'wxi'            = 'WiX Include Source File'
+    'wxl'            = 'WiX Localization Source File'
+    'wxs'            = 'WiX Source File'
+    'xaml'           = 'XAML Source File'
+    'xhtml'          = 'HTML Source File'
+    'xml'            = 'XML Source File'
+    'yaml'           = 'Yaml Source File'
+    'yml'            = 'Yaml Source File'
+    'zsh'            = 'ZSH Source File'
+}
 
-# Priority 1: Check Windows PATH via where.exe
-$whereCmd = where.exe neovide 2>$null
-if ($whereCmd) {
-    $firstHit = ($whereCmd -split "`r?`n")[0].Trim()
-    if ($firstHit -and (Test-Path $firstHit)) {
-        # If Scoop shim, read target path from companion .shim file
-        $shimPath = [System.IO.Path]::ChangeExtension($firstHit, ".shim")
-        if (Test-Path $shimPath) {
-            $shimLine = Get-Content $shimPath | Where-Object { $_ -match '^\s*path\s*=\s*"([^"]+)"' }
-            if ($shimLine -and $Matches[1] -and (Test-Path $Matches[1])) {
-                $neovidePath = $Matches[1]
-            }
+function Find-Neovide {
+    param([string]$ExplicitPath)
+
+    if ($ExplicitPath) {
+        $candidate = (Resolve-Path -LiteralPath $ExplicitPath -ErrorAction Stop).Path
+        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
+            ([IO.Path]::GetFileName($candidate) -ieq 'neovide.exe')) {
+            return $candidate
         }
-        if (-not $neovidePath) {
-            $item = Get-Item $firstHit
-            if ($item.LinkType -eq "SymbolicLink" -or $item.Target) {
-                $neovidePath = $item.Target
-            } else {
-                $neovidePath = $item.FullName
+        throw "The specified path is not neovide.exe: $ExplicitPath"
+    }
+
+    # 1. Portable layout: neovide.exe beside script.
+    if ($PSScriptRoot) {
+        $besideScript = Join-Path $PSScriptRoot 'neovide.exe'
+        if (Test-Path -LiteralPath $besideScript -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $besideScript).Path
+        }
+
+        # 2. Portable layout: neovide.exe in subfolder of script's directory.
+        $nearby = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'neovide.exe' -File -Recurse -ErrorAction SilentlyContinue)
+        if ($nearby.Count -eq 1) {
+            return $nearby[0].FullName
+        }
+        if ($nearby.Count -gt 1) {
+            Write-Host 'Multiple Neovide executables found near this script:'
+            for ($i = 0; $i -lt $nearby.Count; $i++) {
+                Write-Host ("[{0}] {1}" -f ($i + 1), $nearby[$i].FullName)
+            }
+            $selection = Read-Host 'Enter the number to use, or press Enter to browse'
+            $number = 0
+            if ([int]::TryParse($selection, [ref]$number) -and $number -ge 1 -and $number -le $nearby.Count) {
+                return $nearby[$number - 1].FullName
             }
         }
     }
-}
 
-# Priority 2: Fallback search locations
-if (-not $neovidePath -or -not (Test-Path $neovidePath)) {
-    $candidates = @(
-        "F:\generic\scoop\apps\neovide\current\neovide.exe",
-        "$env:USERPROFILE\scoop\apps\neovide\current\neovide.exe",
-        "$env:ProgramFiles\Neovide\neovide.exe",
-        "$env:LOCALAPPDATA\Programs\Neovide\neovide.exe"
+    # 3. PATH (includes package-manager shims such as Scoop when configured).
+    $command = Get-Command 'neovide.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command -and $command.Source -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
+        return (Resolve-Path -LiteralPath $command.Source).Path
+    }
+
+    # 4. Windows App Paths registration.
+    $appPathKeys = @(
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe',
+        'HKLM:\Software\Microsoft\Windows\CurrentVersion\App Paths\neovide.exe'
     )
-    foreach ($cand in $candidates) {
-        if (Test-Path $cand) {
-            $neovidePath = $cand
-            break
+    foreach ($key in $appPathKeys) {
+        if (Test-Path $key) {
+            $value = (Get-Item $key).GetValue('')
+            if ($value -and (Test-Path -LiteralPath $value -PathType Leaf)) {
+                return (Resolve-Path -LiteralPath $value).Path
+            }
         }
     }
+
+    # 5. Ask user to locate portable executable.
+    Add-Type -AssemblyName System.Windows.Forms
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Title = 'Select neovide.exe'
+    $dialog.Filter = 'Neovide executable (neovide.exe)|neovide.exe|Executable files (*.exe)|*.exe'
+    $dialog.FileName = 'neovide.exe'
+    $dialog.CheckFileExists = $true
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        if ([IO.Path]::GetFileName($dialog.FileName) -ine 'neovide.exe') {
+            throw 'Selected file is not named neovide.exe.'
+        }
+        return (Resolve-Path -LiteralPath $dialog.FileName).Path
+    }
+
+    throw 'Neovide could not be located. Run again and provide -NeovidePath.'
 }
 
-if (-not $neovidePath -or -not (Test-Path $neovidePath)) {
-    Write-Error "Could not dynamically locate neovide.exe. Ensure it is in PATH."
-    exit 1
+function ConvertTo-RegString {
+    param([Parameter(Mandatory)][string]$Value)
+    return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$installReg = Join-Path $scriptDir "neovide-install.reg"
-$uninstallReg = Join-Path $scriptDir "neovide-uninstall.reg"
-$escapedExe = $neovidePath.Replace('\', '\\')
+$exe = Find-Neovide -ExplicitPath $NeovidePath
+$exeReg = ConvertTo-RegString $exe
 
-# List of 143 code/markup/data file extensions
-$extensions = @(
-    ".ascx", ".asp", ".aspx", ".bash", ".bash_login", ".bash_logout", ".bash_profile", ".bashrc",
-    ".bib", ".bowerrc", ".c", ".c++", ".cc", ".cfg", ".cjs", ".clj", ".cljs", ".cljx", ".clojure",
-    ".cls", ".cmake", ".code-workspace", ".coffee", ".config", ".containerfile", ".cpp", ".cs",
-    ".cshtml", ".csproj", ".css", ".csv", ".csx", ".ctp", ".cxx", ".dart", ".diff", ".dockerfile",
-    ".dot", ".dtd", ".editorconfig", ".edn", ".erb", ".eyaml", ".eyml", ".fs", ".fsi", ".fsscript",
-    ".fsx", ".gemspec", ".gitattributes", ".gitconfig", ".gitignore", ".go", ".gradle", ".groovy",
-    ".h", ".h++", ".handlebars", ".hbs", ".hh", ".hpp", ".htm", ".html", ".hxx", ".ini", ".ipynb",
-    ".jade", ".jav", ".java", ".js", ".jscsrc", ".jshintrc", ".jshtm", ".json", ".jsp", ".jsx",
-    ".less", ".log", ".lua", ".m", ".makefile", ".markdown", ".md", ".mdoc", ".mdown", ".mdtext",
-    ".mdtxt", ".mdwn", ".mjs", ".mk", ".mkd", ".mkdn", ".ml", ".mli", ".npmignore", ".php",
-    ".phtml", ".pl", ".pl6", ".plist", ".pm", ".pm6", ".pod", ".pp", ".profile", ".properties",
-    ".ps1", ".psd1", ".psgi", ".psm1", ".py", ".pyi", ".r", ".rb", ".rhistory", ".rprofile",
-    ".rs", ".rst", ".rt", ".sass", ".scss", ".sh", ".shtml", ".sql", ".svg", ".svgz", ".t",
-    ".tex", ".toml", ".ts", ".tsx", ".txt", ".vb", ".vue", ".wxi", ".wxl", ".wxs", ".xaml",
-    ".xhtml", ".xml", ".yaml", ".yml", ".zsh"
-)
-
-# 2. Build install .reg
-$installSb = [System.Text.StringBuilder]::new()
-[void]$installSb.AppendLine("Windows Registry Editor Version 5.00`r`n")
-
-# Context Menus
-[void]$installSb.AppendLine("; Context Menus")
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with &Neovide]")
-[void]$installSb.AppendLine('@="Open with &Neovide"')
-[void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with &Neovide\command]")
-[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide]")
-[void]$installSb.AppendLine('@="Open with &Neovide"')
-[void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide\command]")
-[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%V\""'))
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide]")
-[void]$installSb.AppendLine('@="Open with &Neovide"')
-[void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide\command]")
-[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%V\""'))
-[void]$installSb.AppendLine("")
-
-# Portable Application Handler Registration
-[void]$installSb.AppendLine("; Portable Application Handler")
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]")
-[void]$installSb.AppendLine('"FriendlyAppName"="Neovide"')
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]")
-[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\",0"'))
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open]")
-[void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]")
-[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
-[void]$installSb.AppendLine("")
-
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\SupportedTypes]")
-foreach ($ext in $extensions) {
-    [void]$installSb.AppendLine(('"' + $ext + '"=""'))
-}
-[void]$installSb.AppendLine("")
-
-# File Extension Associations
-[void]$installSb.AppendLine("; File Extension Associations")
-foreach ($ext in $extensions) {
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "]"))
-    [void]$installSb.AppendLine('@="Applications\\neovide.exe"')
-    [void]$installSb.AppendLine("")
-
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "\OpenWithProgids]"))
-    [void]$installSb.AppendLine('"Applications\\neovide.exe"=""')
-    [void]$installSb.AppendLine("")
+$outputDirectory = $PSScriptRoot
+if (-not $outputDirectory) {
+    $outputDirectory = (Get-Location).Path
 }
 
-[System.IO.File]::WriteAllText($installReg, $installSb.ToString(), [System.Text.Encoding]::Unicode)
+$installAssociations = [System.Collections.Generic.List[string]]::new()
+$uninstallAssociations = [System.Collections.Generic.List[string]]::new()
+$installContext = [System.Collections.Generic.List[string]]::new()
+$uninstallContext = [System.Collections.Generic.List[string]]::new()
 
-# 3. Build uninstall .reg
-$uninstallSb = [System.Text.StringBuilder]::new()
-[void]$uninstallSb.AppendLine("Windows Registry Editor Version 5.00`r`n")
+$installAssociations.Add('Windows Registry Editor Version 5.00')
+$uninstallAssociations.Add('Windows Registry Editor Version 5.00')
+$installContext.Add('Windows Registry Editor Version 5.00')
+$uninstallContext.Add('Windows Registry Editor Version 5.00')
 
-# Context menus removal
-[void]$uninstallSb.AppendLine("; Remove Context Menus")
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with &Neovide]")
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide]")
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide]")
-[void]$uninstallSb.AppendLine("")
+foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
+    $progId = "Neovide.$extension"
+    $description = ConvertTo-RegString $FileTypes[$extension]
 
-# Portable Application Handler removal
-[void]$uninstallSb.AppendLine("; Remove Portable Application Handler")
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]")
-[void]$uninstallSb.AppendLine("")
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+    $installAssociations.Add('"' + $progId + '"=""')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId]")
+    $installAssociations.Add('@="' + $description + '"')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\DefaultIcon]")
+    $installAssociations.Add('@="' + $exeReg + ',0"')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
+    $installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
 
-# File extension associations removal
-[void]$uninstallSb.AppendLine("; Remove File Extension Associations")
-foreach ($ext in $extensions) {
-    [void]$uninstallSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "\OpenWithProgids]"))
-    [void]$uninstallSb.AppendLine('"Applications\\neovide.exe"=-')
-    [void]$uninstallSb.AppendLine("")
-
-    # Also clean up old synthetic ProgIDs if present
-    $progId = "Neovide" + $ext
-    [void]$uninstallSb.AppendLine(("[-HKEY_CURRENT_USER\Software\Classes\" + $progId + "]"))
-    [void]$uninstallSb.AppendLine("")
+    $uninstallAssociations.Add('')
+    $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+    $uninstallAssociations.Add('"' + $progId + '"=-')
+    $uninstallAssociations.Add('')
+    $uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\$progId]")
 }
 
-[System.IO.File]::WriteAllText($uninstallReg, $uninstallSb.ToString(), [System.Text.Encoding]::Unicode)
+# Right-click a file.
+$installContext.Add('')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
+$installContext.Add('@="Open with Neovide"')
+$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide\command]')
+$installContext.Add('@="\"' + $exeReg + '\" \"%1\""')
 
-Write-Host "Resolved Neovide: $neovidePath"
-Write-Host "Generated: $installReg"
-Write-Host "Generated: $uninstallReg"
+# Right-click a folder.
+$installContext.Add('')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
+$installContext.Add('@="Open with Neovide"')
+$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
+$installContext.Add('@="\"' + $exeReg + '\" \"%1\""')
 
-# 4. Perform requested action
-if ($Action -eq "install") {
-    Write-Host "Importing associations and context menu into Registry..."
-    Start-Process reg.exe -ArgumentList "import `"$installReg`"" -Wait -NoNewWindow
-    Write-Host "Neovide associations successfully installed." -ForegroundColor Green
-} elseif ($Action -eq "uninstall") {
-    Write-Host "Removing associations and context menu from Registry..."
-    Start-Process reg.exe -ArgumentList "import `"$uninstallReg`"" -Wait -NoNewWindow
-    Write-Host "Neovide associations successfully removed." -ForegroundColor Yellow
-} else {
-    Write-Host "Registry files generated. Run with -Action install or -Action uninstall to apply."
+# Right-click the background inside a folder.
+$installContext.Add('')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
+$installContext.Add('@="Open with Neovide"')
+$installContext.Add('"Icon"="' + $exeReg + ',0"')
+$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
+$installContext.Add('@="\"' + $exeReg + '\" \"%V\""')
+
+$uninstallContext.Add('')
+$uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
+$uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
+$uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
+
+$files = @{
+    'install-associations.reg'   = $installAssociations
+    'uninstall-associations.reg' = $uninstallAssociations
+    'install-context.reg'        = $installContext
+    'uninstall-context.reg'      = $uninstallContext
 }
+
+foreach ($name in $files.Keys) {
+    $path = Join-Path $outputDirectory $name
+    $content = ($files[$name] -join "`r`n") + "`r`n"
+    [IO.File]::WriteAllText($path, $content, [Text.Encoding]::Unicode)
+}
+
+Write-Host ''
+Write-Host "Neovide found: $exe" -ForegroundColor Green
+Write-Host "Generated registry files in: $outputDirectory" -ForegroundColor Green
+Write-Host ''
+Write-Host 'Import install-associations.reg and install-context.reg to install.'
+Write-Host 'Import the corresponding uninstall files to remove the entries.'
+Write-Host ''
+Write-Host 'Note: Windows does not let ordinary registry files choose the default'
+Write-Host 'app for each extension. Use Open with > Choose another app > Always'
+Write-Host 'open with this app if you also want double-click to launch Neovide.'
