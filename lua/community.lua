@@ -120,6 +120,10 @@ return {
   {
     "Isrothy/neominimap.nvim",
     opts = {
+      click = {
+        enabled = true,
+        auto_switch_focus = true,
+      },
       float = {
         window_border = "none",
         margin = {
