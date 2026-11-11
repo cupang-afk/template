@@ -227,12 +227,46 @@ function Find-Neovide {
     throw 'Neovide could not be located. Run again and provide -NeovidePath.'
 }
 
+function Resolve-RealExecutable {
+    param([string]$Path)
+
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $Path
+    }
+
+    # Scoop shim companion .shim contains target binary with icons
+    $shim = [IO.Path]::ChangeExtension($Path, '.shim')
+    if (Test-Path -LiteralPath $shim -PathType Leaf) {
+        $shimContent = Get-Content -LiteralPath $shim -ErrorAction SilentlyContinue
+        foreach ($line in $shimContent) {
+            if ($line -match '^\s*path\s*=\s*["'']?([^"'']+)["'']?') {
+                $target = $Matches[1].Trim()
+                if (Test-Path -LiteralPath $target -PathType Leaf) {
+                    return (Resolve-Path -LiteralPath $target).Path
+                }
+            }
+        }
+    }
+
+    # Symlink / reparse point
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    if ($item.Target) {
+        $target = $item.Target
+        if ($target -is [array]) { $target = $target[0] }
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $target).Path
+        }
+    }
+
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
 function ConvertTo-RegString {
     param([Parameter(Mandatory)][string]$Value)
     return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
-$exe = Find-Neovide -ExplicitPath $NeovidePath
+$exe = Resolve-RealExecutable (Find-Neovide -ExplicitPath $NeovidePath)
 $exeReg = ConvertTo-RegString $exe
 
 $outputDirectory = $PSScriptRoot
@@ -273,6 +307,20 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\$progId]")
 }
+
+# Application registration for Open With and DefaultIcon fallback
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
+$installAssociations.Add('"FriendlyAppName"="Neovide"')
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]')
+$installAssociations.Add('@="' + $exeReg + ',0"')
+$installAssociations.Add('')
+$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]')
+$installAssociations.Add('@="\"' + $exeReg + '\" \"%1\""')
+
+$uninstallAssociations.Add('')
+$uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
 
 # Right-click a file.
 $installContext.Add('')
