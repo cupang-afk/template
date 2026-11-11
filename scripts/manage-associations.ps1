@@ -6,23 +6,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# 1. Locate Neovide binary dynamically using native Windows where.exe
+# 1. Dynamically locate neovide.exe binary
 $neovidePath = $null
-$whereResult = where.exe neovide 2>$null
-if ($whereResult) {
-    # If multiple lines, pick first
-    $neovideCandidate = ($whereResult -split "`r?`n")[0]
-    if (Test-Path $neovideCandidate) {
-        # Check if Scoop .shim exists next to it
-        $shimFile = [System.IO.Path]::ChangeExtension($neovideCandidate, ".shim")
-        if (Test-Path $shimFile) {
-            $shimContent = Get-Content $shimFile | Where-Object { $_ -match '^\s*path\s*=\s*"([^"]+)"' }
-            if ($shimContent -and $Matches[1] -and (Test-Path $Matches[1])) {
+
+# Priority 1: Check Windows PATH via where.exe
+$whereCmd = where.exe neovide 2>$null
+if ($whereCmd) {
+    $firstHit = ($whereCmd -split "`r?`n")[0].Trim()
+    if ($firstHit -and (Test-Path $firstHit)) {
+        # If Scoop shim, read target path from companion .shim file
+        $shimPath = [System.IO.Path]::ChangeExtension($firstHit, ".shim")
+        if (Test-Path $shimPath) {
+            $shimLine = Get-Content $shimPath | Where-Object { $_ -match '^\s*path\s*=\s*"([^"]+)"' }
+            if ($shimLine -and $Matches[1] -and (Test-Path $Matches[1])) {
                 $neovidePath = $Matches[1]
             }
         }
         if (-not $neovidePath) {
-            $item = Get-Item $neovideCandidate
+            $item = Get-Item $firstHit
             if ($item.LinkType -eq "SymbolicLink" -or $item.Target) {
                 $neovidePath = $item.Target
             } else {
@@ -32,33 +33,33 @@ if ($whereResult) {
     }
 }
 
-# Fallbacks for standard Scoop / Program Files locations
+# Priority 2: Fallback search locations
 if (-not $neovidePath -or -not (Test-Path $neovidePath)) {
-    $searchPaths = @(
+    $candidates = @(
         "F:\generic\scoop\apps\neovide\current\neovide.exe",
         "$env:USERPROFILE\scoop\apps\neovide\current\neovide.exe",
-        "$env:ProgramFiles\Neovide\neovide.exe"
+        "$env:ProgramFiles\Neovide\neovide.exe",
+        "$env:LOCALAPPDATA\Programs\Neovide\neovide.exe"
     )
-    foreach ($p in $searchPaths) {
-        if (Test-Path $p) {
-            $neovidePath = $p
+    foreach ($cand in $candidates) {
+        if (Test-Path $cand) {
+            $neovidePath = $cand
             break
         }
     }
 }
 
 if (-not $neovidePath -or -not (Test-Path $neovidePath)) {
-    Write-Error "neovide.exe not found in PATH or standard directories."
+    Write-Error "Could not dynamically locate neovide.exe. Ensure it is in PATH."
     exit 1
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $installReg = Join-Path $scriptDir "neovide-install.reg"
 $uninstallReg = Join-Path $scriptDir "neovide-uninstall.reg"
-
 $escapedExe = $neovidePath.Replace('\', '\\')
 
-# 143 code/markup/data file extensions matching VS Code registry list
+# List of 143 code/markup/data file extensions
 $extensions = @(
     ".ascx", ".asp", ".aspx", ".bash", ".bash_login", ".bash_logout", ".bash_profile", ".bashrc",
     ".bib", ".bowerrc", ".c", ".c++", ".cc", ".cfg", ".cjs", ".clj", ".cljs", ".cljx", ".clojure",
@@ -104,49 +105,39 @@ $installSb = [System.Text.StringBuilder]::new()
 [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%V\""'))
 [void]$installSb.AppendLine("")
 
-# Registered Applications & Capabilities (Windows Default Programs support)
-[void]$installSb.AppendLine("; Registered Application")
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\RegisteredApplications]")
-[void]$installSb.AppendLine('"Neovide"="Software\\Neovide\\Capabilities"')
+# Portable Application Handler Registration
+[void]$installSb.AppendLine("; Portable Application Handler")
+[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]")
+[void]$installSb.AppendLine('"FriendlyAppName"="Neovide"')
 [void]$installSb.AppendLine("")
 
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Neovide\Capabilities]")
-[void]$installSb.AppendLine('"ApplicationName"="Neovide"')
-[void]$installSb.AppendLine('"ApplicationDescription"="Neovide - No Nonsense Neovim Client"')
+[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]")
+[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\",0"'))
 [void]$installSb.AppendLine("")
 
-[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Neovide\Capabilities\FileAssociations]")
+[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open]")
+[void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
+[void]$installSb.AppendLine("")
+
+[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]")
+[void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
+[void]$installSb.AppendLine("")
+
+[void]$installSb.AppendLine("[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\SupportedTypes]")
 foreach ($ext in $extensions) {
-    [void]$installSb.AppendLine(('"' + $ext + '"="Neovide' + $ext + '"'))
+    [void]$installSb.AppendLine(('"' + $ext + '"=""'))
 }
 [void]$installSb.AppendLine("")
 
-# File Associations (ProgIDs & OpenWithProgids)
-[void]$installSb.AppendLine("; File Associations")
+# File Extension Associations
+[void]$installSb.AppendLine("; File Extension Associations")
 foreach ($ext in $extensions) {
-    $progId = "Neovide" + $ext
-    $cleanExt = $ext.TrimStart('.').ToUpper()
+    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "]"))
+    [void]$installSb.AppendLine('@="Applications\\neovide.exe"')
+    [void]$installSb.AppendLine("")
 
     [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "\OpenWithProgids]"))
-    [void]$installSb.AppendLine('"Neovide"=""')
-    [void]$installSb.AppendLine(('"' + $progId + '"=""'))
-    [void]$installSb.AppendLine("")
-
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $progId + "]"))
-    [void]$installSb.AppendLine(('"@"="' + $cleanExt + ' Source File"'))
-    [void]$installSb.AppendLine('"AppUserModelID"="Neovide.Neovide"')
-    [void]$installSb.AppendLine("")
-
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $progId + "\DefaultIcon]"))
-    [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\",0"'))
-    [void]$installSb.AppendLine("")
-
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $progId + "\shell\open]"))
-    [void]$installSb.AppendLine(('"Icon"="\"' + $escapedExe + '\""'))
-    [void]$installSb.AppendLine("")
-
-    [void]$installSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $progId + "\shell\open\command]"))
-    [void]$installSb.AppendLine(('"@"="\"' + $escapedExe + '\" \"%1\""'))
+    [void]$installSb.AppendLine('"Applications\\neovide.exe"=""')
     [void]$installSb.AppendLine("")
 }
 
@@ -160,23 +151,25 @@ $uninstallSb = [System.Text.StringBuilder]::new()
 [void]$uninstallSb.AppendLine("; Remove Context Menus")
 [void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with &Neovide]")
 [void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with &Neovide]")
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide]`r`n")
+[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with &Neovide]")
+[void]$uninstallSb.AppendLine("")
 
-# Registered Application removal
-[void]$uninstallSb.AppendLine("; Remove Registered Application")
-[void]$uninstallSb.AppendLine("[HKEY_CURRENT_USER\Software\RegisteredApplications]")
-[void]$uninstallSb.AppendLine('"Neovide"=-`r`n')
-[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Neovide]`r`n")
+# Portable Application Handler removal
+[void]$uninstallSb.AppendLine("; Remove Portable Application Handler")
+[void]$uninstallSb.AppendLine("[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]")
+[void]$uninstallSb.AppendLine("")
 
-# File associations removal
-[void]$uninstallSb.AppendLine("; Remove File Associations")
+# File extension associations removal
+[void]$uninstallSb.AppendLine("; Remove File Extension Associations")
 foreach ($ext in $extensions) {
-    $progId = "Neovide" + $ext
     [void]$uninstallSb.AppendLine(("[HKEY_CURRENT_USER\Software\Classes\" + $ext + "\OpenWithProgids]"))
-    [void]$uninstallSb.AppendLine('"Neovide"=-')
-    [void]$uninstallSb.AppendLine(('"' + $progId + '"=-`r`n'))
+    [void]$uninstallSb.AppendLine('"Applications\\neovide.exe"=-')
+    [void]$uninstallSb.AppendLine("")
 
-    [void]$uninstallSb.AppendLine(("[-HKEY_CURRENT_USER\Software\Classes\" + $progId + "]`r`n"))
+    # Also clean up old synthetic ProgIDs if present
+    $progId = "Neovide" + $ext
+    [void]$uninstallSb.AppendLine(("[-HKEY_CURRENT_USER\Software\Classes\" + $progId + "]"))
+    [void]$uninstallSb.AppendLine("")
 }
 
 [System.IO.File]::WriteAllText($uninstallReg, $uninstallSb.ToString(), [System.Text.Encoding]::Unicode)
