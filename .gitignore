@@ -1,13 +1,13 @@
 # Generated registry files
 *.reg
-scripts/*.reg
+scripts/windows/*.reg
 
 # Plugin lockfile
 lazy-lock.json
 
 # Launcher binaries
-scripts/launcher/*.exe
-scripts/launcher/*.obj
-scripts/launcher/*.o
-scripts/launcher/*.res
+scripts/windows/launcher/*.exe
+scripts/windows/launcher/*.obj
+scripts/windows/launcher/*.o
+scripts/windows/launcher/*.res
 

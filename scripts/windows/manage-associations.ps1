@@ -270,7 +270,7 @@ if (-not (Test-Path $launcherExe)) {
     }
 }
 if (-not (Test-Path $launcherExe)) {
-    Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\launcher\build.bat <compiler>.'
+    Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\windows\launcher\build.bat <compiler>.'
 }
 
 $cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
