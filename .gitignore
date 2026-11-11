@@ -11,3 +11,6 @@ scripts/windows/launcher/*.obj
 scripts/windows/launcher/*.o
 scripts/windows/launcher/*.res
 
+# Auto-downloaded portable TCC
+scripts/windows/launcher/tcc/
+
