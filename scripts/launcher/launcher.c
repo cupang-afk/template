@@ -6,7 +6,6 @@
 #define _UNICODE
 #endif
 #include <windows.h>
-#include <shellapi.h>
 #include <wchar.h>
 
 #define ACTIVE_PIPE_FILE L"neovide_active.pipe"
@@ -16,8 +15,25 @@
 
 #ifdef _MSC_VER
 #pragma comment(lib, "user32.lib")
-#pragma comment(lib, "shell32.lib")
 #endif
+
+typedef LPWSTR * (WINAPI *CommandLineToArgvWProc)(LPCWSTR, int *);
+
+static LPWSTR *GetCommandLineArgs(int *argc) {
+    HMODULE shell32 = LoadLibraryW(L"shell32.dll");
+    CommandLineToArgvWProc proc;
+
+    if (!shell32) {
+        return NULL;
+    }
+
+    proc = (CommandLineToArgvWProc)GetProcAddress(shell32, "CommandLineToArgvW");
+    if (!proc) {
+        return NULL;
+    }
+
+    return proc(GetCommandLineW(), argc);
+}
 
 static void AppendString(wchar_t *dst, size_t cap, const wchar_t *src) {
     size_t len = 0;
@@ -113,8 +129,14 @@ static int GetActivePipe(wchar_t *outPipe, DWORD maxLen) {
                     buf[--bytesRead] = '\0';
                 }
 
-                outPipe[0] = L'\0';
-                if (MultiByteToWideChar(CP_UTF8, 0, buf, -1, outPipe, (int)maxLen) > 0 && ProbePipe(outPipe)) {
+                {
+                    DWORD i;
+                    for (i = 0; i < bytesRead && i + 1 < maxLen; i++) {
+                        outPipe[i] = (wchar_t)(unsigned char)buf[i];
+                    }
+                    outPipe[i] = L'\0';
+                }
+                if (ProbePipe(outPipe)) {
                     CloseHandle(hFile);
                     return 1;
                 }
@@ -205,7 +227,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     (void)nShowCmd;
 
     int argc = 0;
-    LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    LPWSTR *argv = GetCommandLineArgs(&argc);
     if (!argv) {
         return 1;
     }
