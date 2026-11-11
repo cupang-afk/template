@@ -269,6 +269,7 @@ if (-not (Test-Path $launcherExe)) {
 
 $cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
 $cmdExeReg = ConvertTo-RegString $cmdExe
+$cmdExeName = [IO.Path]::GetFileName($cmdExe)
 
 $outputDirectory = $PSScriptRoot
 if (-not $outputDirectory) {
@@ -287,22 +288,24 @@ $uninstallContext.Add('Windows Registry Editor Version 5.00')
 
 # Portable application registration & icon definition
 $installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
+$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
 $installAssociations.Add('"FriendlyAppName"="Neovide"')
 $installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\DefaultIcon]')
+$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\DefaultIcon]")
 $installAssociations.Add('@="' + $exeReg + ',0"')
 $installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\shell\open\command]')
+$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\shell\open\command]")
 $installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 $installAssociations.Add('')
-$installAssociations.Add('[HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe\SupportedTypes]')
+$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\SupportedTypes]")
 foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $installAssociations.Add('".' + $extension + '"=""')
 }
 
 $uninstallAssociations.Add('')
+$uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
 $uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
+$uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide-launcher.exe]')
 
 foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $progId = "Neovide.$extension"
@@ -311,10 +314,10 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     # File class mapping to Application handler
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension]")
-    $installAssociations.Add('@="Applications\\neovide.exe"')
+    $installAssociations.Add('@="Applications\\' + $cmdExeName + '"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
-    $installAssociations.Add('"Applications\\neovide.exe"=""')
+    $installAssociations.Add('"Applications\\' + $cmdExeName + '"=""')
     $installAssociations.Add('"' + $progId + '"=""')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId]")
@@ -326,19 +329,22 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
     $installAssociations.Add('@="\"' + $cmdExeReg + '\" \"%1\""')
 
-    # Explorer FileExts MRU binding (prevents "How do you want to open this file?" dialog)
+    # Explorer FileExts MRU binding (matches executable name exactly)
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
-    $installAssociations.Add('"a"="neovide.exe"')
+    $installAssociations.Add('"a"="' + $cmdExeName + '"')
     $installAssociations.Add('"MRUList"="a"')
     $installAssociations.Add('')
     $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
-    $installAssociations.Add('"Applications\\neovide.exe"=hex(0):')
+    $installAssociations.Add('"Applications\\' + $cmdExeName + '"=hex(0):')
+    $installAssociations.Add('"' + $progId + '"=hex(0):')
 
     # Uninstallation entries
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+    $uninstallAssociations.Add('"Applications\\' + $cmdExeName + '"=-')
     $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
+    $uninstallAssociations.Add('"Applications\\neovide-launcher.exe"=-')
     $uninstallAssociations.Add('"' + $progId + '"=-')
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\$progId]")
@@ -348,7 +354,10 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $uninstallAssociations.Add('"MRUList"=-')
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
+    $uninstallAssociations.Add('"Applications\\' + $cmdExeName + '"=-')
     $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
+    $uninstallAssociations.Add('"Applications\\neovide-launcher.exe"=-')
+    $uninstallAssociations.Add('"' + $progId + '"=-')
 }
 
 # Right-click a file.
