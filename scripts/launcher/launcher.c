@@ -263,7 +263,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         AppendQuotedArg(serverCmd, MAX_COMMAND_LENGTH, NEOVIM_EXE);
         AppendString(serverCmd, MAX_COMMAND_LENGTH, L" --server");
         AppendQuotedArg(serverCmd, MAX_COMMAND_LENGTH, targetPipe);
-        AppendString(serverCmd, MAX_COMMAND_LENGTH, L" --remote-tab-silent");
+        AppendString(serverCmd, MAX_COMMAND_LENGTH, L" --remote-silent");
         AppendQuotedArg(serverCmd, MAX_COMMAND_LENGTH, fileArg);
 
         if (RunProcessWait(serverCmd) == 0) {
