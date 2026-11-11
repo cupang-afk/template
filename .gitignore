@@ -4,3 +4,9 @@ scripts/*.reg
 
 # Plugin lockfile
 lazy-lock.json
+
+# Launcher binaries
+scripts/launcher/*.exe
+scripts/launcher/*.obj
+scripts/launcher/*.res
+
