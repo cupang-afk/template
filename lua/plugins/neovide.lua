@@ -1,5 +1,8 @@
 if not vim.g.neovide then return {} end
 
+-- Start named pipe server for single-instance launcher tab-reuse
+pcall(vim.fn.serverstart, [[\\.\pipe\neovide]])
+
 ---@type LazySpec
 return {
   "astrocore",
