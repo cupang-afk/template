@@ -110,5 +110,6 @@ return {
   { import = "astrocommunity.recipes.heirline-vscode-winbar" },
   { import = "astrocommunity.recipes.neovide" },
   { import = "astrocommunity.recipes.cache-colorscheme" },
+  { import = "astrocommunity.git.diffview-nvim" },
   -- import/override with your plugins folder
 }
