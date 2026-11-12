@@ -3,10 +3,16 @@ param(
     [Parameter()]
     [string]$NeovidePath,
     [Parameter()]
-    [switch]$Import
+    [switch]$Import,
+    [Parameter()]
+    [switch]$Uninstall
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Import -and $Uninstall) {
+    throw 'Specify either -Import or -Uninstall, not both.'
+}
 
 # File types copied from supplied VS Code association list.
 $FileTypes = @{
@@ -256,41 +262,142 @@ public static class IconProbe {
     return $count -gt 0
 }
 
-$exe = Find-Neovide -ExplicitPath $NeovidePath
-$exeReg = ConvertTo-RegString $exe
+function Invoke-ShellRefresh {
+    if (-not ('ShellRefresh' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ShellRefresh {
+    [DllImport("shell32.dll")]
+    public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+}
+'@
+    }
+    [ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+}
 
-# Check for the single-instance launcher.
-$launcherDir = Join-Path $PSScriptRoot 'launcher'
-$launcherExe = Join-Path $launcherDir 'neovide-launcher.exe'
-if (-not (Test-Path $launcherExe)) {
-    $buildBat = Join-Path $launcherDir 'build.bat'
-    if (Test-Path $buildBat) {
-        Write-Host 'Building neovide-launcher.exe...' -ForegroundColor Cyan
-        & cmd.exe /c "`"$buildBat`""
+# .reg files cannot delete a value conditionally, so tidy the shared keys afterwards.
+function Invoke-UninstallCleanup {
+    param([string[]]$Extensions)
+
+    $currentUser = [Microsoft.Win32.Registry]::CurrentUser
+    $fileExtsPath = 'Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts'
+    $classesPath = 'Software\Classes'
+
+    $fileExts = $currentUser.OpenSubKey($fileExtsPath, $true)
+    $classes = $currentUser.OpenSubKey($classesPath, $true)
+    if (-not $fileExts -or -not $classes) {
+        if ($fileExts) { $fileExts.Close() }
+        if ($classes) { $classes.Close() }
+        return
+    }
+
+    try {
+        foreach ($extension in $Extensions) {
+            $appNames = @('neovide.exe', 'neovide-launcher.exe')
+            $progId = "Neovide.$extension"
+
+            # Explorer's per-extension MRU list: drop only our values, keep other apps.
+            $openWithListPath = ".$extension\OpenWithList"
+            $openWithList = $fileExts.OpenSubKey($openWithListPath, $true)
+            if ($openWithList) {
+                # Drop our entries in case the .reg import did not remove them.
+                foreach ($name in @($openWithList.GetValueNames())) {
+                    if ($name -eq 'MRUList') { continue }
+                    if ($appNames -contains "$($openWithList.GetValue($name))") {
+                        $openWithList.DeleteValue($name, $false)
+                    }
+                }
+
+                # .reg deletes our letter before this runs, so rebuild MRUList by
+                # filtering out letters that no longer have a value. This keeps the
+                # existing recency order for other applications.
+                if ($openWithList.GetValueNames() -contains 'MRUList') {
+                    $remaining = @($openWithList.GetValueNames() | Where-Object { $_ -ne 'MRUList' })
+                    $mruList = "$($openWithList.GetValue('MRUList'))"
+                    $filtered = -join @($mruList.ToCharArray() | Where-Object { $remaining -contains "$_" })
+                    if (-not $filtered) {
+                        $openWithList.DeleteValue('MRUList', $false)
+                    } elseif ($filtered -ne $mruList) {
+                        $openWithList.SetValue('MRUList', $filtered)
+                    }
+                }
+
+                $isEmpty = ($openWithList.GetValueNames().Count -eq 0 -and
+                            $openWithList.GetSubKeyNames().Count -eq 0)
+                $openWithList.Close()
+                if ($isEmpty) {
+                    $fileExts.DeleteSubKey($openWithListPath, $false)
+                }
+            }
+
+            # Remove keys that our value deletions left empty.
+            $feProgIds = $fileExts.OpenSubKey(".$extension\OpenWithProgids", $true)
+            if ($feProgIds) {
+                $isEmpty = ($feProgIds.GetValueNames().Count -eq 0 -and $feProgIds.GetSubKeyNames().Count -eq 0)
+                $feProgIds.Close()
+                if ($isEmpty) { $fileExts.DeleteSubKey(".$extension\OpenWithProgids", $false) }
+            }
+            $classProgIds = $classes.OpenSubKey(".$extension\OpenWithProgids", $true)
+            if ($classProgIds) {
+                $isEmpty = ($classProgIds.GetValueNames().Count -eq 0 -and $classProgIds.GetSubKeyNames().Count -eq 0)
+                $classProgIds.Close()
+                if ($isEmpty) { $classes.DeleteSubKey(".$extension\OpenWithProgids", $false) }
+            }
+
+            $fileExtKey = $fileExts.OpenSubKey(".$extension", $true)
+            if ($fileExtKey) {
+                $isEmpty = ($fileExtKey.GetValueNames().Count -eq 0 -and
+                            $fileExtKey.GetSubKeyNames().Count -eq 0)
+                $fileExtKey.Close()
+                if ($isEmpty) { $fileExts.DeleteSubKey(".$extension", $false) }
+            }
+        }
+    } finally {
+        $fileExts.Close()
+        $classes.Close()
     }
 }
-if (-not (Test-Path $launcherExe)) {
-    Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\windows\launcher\build.bat <compiler>.'
-}
 
-$cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
-$cmdExeReg = ConvertTo-RegString $cmdExe
-$cmdExeName = [IO.Path]::GetFileName($cmdExe)
+$extensions = @($FileTypes.Keys | Sort-Object)
 
-# Icon: use the selected neovide.exe if it has an icon; otherwise fall back to the launcher.
-$iconExe = if (Test-HasIcon $exe) { $exe } else { $cmdExe }
-$iconReg = ConvertTo-RegString $iconExe
+if (-not $Uninstall) {
+    $exe = Find-Neovide -ExplicitPath $NeovidePath
+    $exeReg = ConvertTo-RegString $exe
 
-# When the launcher is used, pass the resolved neovide.exe path as its first argument.
-$launchCommand = if ($cmdExe -eq $launcherExe) {
-    '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%1\""'
-} else {
-    '@="\"' + $cmdExeReg + '\" \"%1\""'
-}
-$launchFolderCommand = if ($cmdExe -eq $launcherExe) {
-    '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%V\""'
-} else {
-    '@="\"' + $cmdExeReg + '\" \"%V\""'
+    # Check for the single-instance launcher.
+    $launcherDir = Join-Path $PSScriptRoot 'launcher'
+    $launcherExe = Join-Path $launcherDir 'neovide-launcher.exe'
+    if (-not (Test-Path $launcherExe)) {
+        $buildBat = Join-Path $launcherDir 'build.bat'
+        if (Test-Path $buildBat) {
+            Write-Host 'Building neovide-launcher.exe...' -ForegroundColor Cyan
+            & cmd.exe /c "`"$buildBat`""
+        }
+    }
+    if (-not (Test-Path $launcherExe)) {
+        Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\windows\launcher\build.bat <compiler>.'
+    }
+
+    $cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
+    $cmdExeReg = ConvertTo-RegString $cmdExe
+    $cmdExeName = [IO.Path]::GetFileName($cmdExe)
+
+    # Icon: use the selected neovide.exe if it has an icon; otherwise fall back to the launcher.
+    $iconExe = if (Test-HasIcon $exe) { $exe } else { $cmdExe }
+    $iconReg = ConvertTo-RegString $iconExe
+
+    # When the launcher is used, pass the resolved neovide.exe path as its first argument.
+    $launchCommand = if ($cmdExe -eq $launcherExe) {
+        '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%1\""'
+    } else {
+        '@="\"' + $cmdExeReg + '\" \"%1\""'
+    }
+    $launchFolderCommand = if ($cmdExe -eq $launcherExe) {
+        '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%V\""'
+    } else {
+        '@="\"' + $cmdExeReg + '\" \"%V\""'
+    }
 }
 
 $outputDirectory = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
@@ -306,63 +413,68 @@ $installContext.Add('Windows Registry Editor Version 5.00')
 $uninstallContext.Add('Windows Registry Editor Version 5.00')
 
 # Portable application registration & icon definition
-$installAssociations.Add('')
-$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
-$installAssociations.Add('"FriendlyAppName"="Neovide"')
-$installAssociations.Add('')
-$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\DefaultIcon]")
-$installAssociations.Add('@="' + $iconReg + ',0"')
-$installAssociations.Add('')
-$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\shell\open\command]")
-$installAssociations.Add($launchCommand)
-$installAssociations.Add('')
-$installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\SupportedTypes]")
-foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
-    $installAssociations.Add('".' + $extension + '"=""')
+if (-not $Uninstall) {
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
+    $installAssociations.Add('"FriendlyAppName"="Neovide"')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\DefaultIcon]")
+    $installAssociations.Add('@="' + $iconReg + ',0"')
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\shell\open\command]")
+    $installAssociations.Add($launchCommand)
+    $installAssociations.Add('')
+    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName\SupportedTypes]")
+    foreach ($extension in $extensions) {
+        $installAssociations.Add('".' + $extension + '"=""')
+    }
 }
 
 $uninstallAssociations.Add('')
-$uninstallAssociations.Add("[-HKEY_CURRENT_USER\Software\Classes\Applications\$cmdExeName]")
-# Clean up application keys written by older versions of this script.
+# Clean up application keys written by this and older versions of the script.
 $uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide.exe]')
 $uninstallAssociations.Add('[-HKEY_CURRENT_USER\Software\Classes\Applications\neovide-launcher.exe]')
 
-foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
+foreach ($extension in $extensions) {
     $progId = "Neovide.$extension"
     $description = ConvertTo-RegString $FileTypes[$extension]
 
-    # File class mapping to Application handler
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension]")
-    $installAssociations.Add('@="Applications\\' + $cmdExeName + '"')
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
-    $installAssociations.Add('"Applications\\' + $cmdExeName + '"=""')
-    $installAssociations.Add('"' + $progId + '"=""')
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId]")
-    $installAssociations.Add('@="' + $description + '"')
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\DefaultIcon]")
-    $installAssociations.Add('@="' + $iconReg + ',0"')
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
-    $installAssociations.Add($launchCommand)
+    if (-not $Uninstall) {
+        # File class mapping to Application handler
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension]")
+        $installAssociations.Add('@="Applications\\' + $cmdExeName + '"')
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
+        $installAssociations.Add('"Applications\\' + $cmdExeName + '"=""')
+        $installAssociations.Add('"' + $progId + '"=""')
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId]")
+        $installAssociations.Add('@="' + $description + '"')
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\DefaultIcon]")
+        $installAssociations.Add('@="' + $iconReg + ',0"')
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\$progId\shell\open\command]")
+        $installAssociations.Add($launchCommand)
 
-    # Explorer FileExts MRU binding (matches executable name exactly)
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
-    $installAssociations.Add('"a"="' + $cmdExeName + '"')
-    $installAssociations.Add('"MRUList"="a"')
-    $installAssociations.Add('')
-    $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
-    $installAssociations.Add('"Applications\\' + $cmdExeName + '"=hex(0):')
-    $installAssociations.Add('"' + $progId + '"=hex(0):')
+        # Explorer FileExts MRU binding (matches executable name exactly)
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
+        $installAssociations.Add('"a"="' + $cmdExeName + '"')
+        $installAssociations.Add('"MRUList"="a"')
+        $installAssociations.Add('')
+        $installAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
+        $installAssociations.Add('"Applications\\' + $cmdExeName + '"=hex(0):')
+        $installAssociations.Add('"' + $progId + '"=hex(0):')
+    }
 
     # Uninstallation entries
     $uninstallAssociations.Add('')
+    $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension]")
+    $uninstallAssociations.Add('@=-')
+    $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Classes\.$extension\OpenWithProgids]")
-    $uninstallAssociations.Add('"Applications\\' + $cmdExeName + '"=-')
     $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
     $uninstallAssociations.Add('"Applications\\neovide-launcher.exe"=-')
     $uninstallAssociations.Add('"' + $progId + '"=-')
@@ -371,50 +483,51 @@ foreach ($extension in ($FileTypes.Keys | Sort-Object)) {
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithList]")
     $uninstallAssociations.Add('"a"=-')
-    $uninstallAssociations.Add('"MRUList"=-')
     $uninstallAssociations.Add('')
     $uninstallAssociations.Add("[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.$extension\OpenWithProgids]")
-    $uninstallAssociations.Add('"Applications\\' + $cmdExeName + '"=-')
     $uninstallAssociations.Add('"Applications\\neovide.exe"=-')
     $uninstallAssociations.Add('"Applications\\neovide-launcher.exe"=-')
     $uninstallAssociations.Add('"' + $progId + '"=-')
 }
 
-# Right-click a file.
-$installContext.Add('')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
-$installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $iconReg + ',0"')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide\command]')
-$installContext.Add($launchCommand)
+if (-not $Uninstall) {
+    # Right-click a file.
+    $installContext.Add('')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
+    $installContext.Add('@="Open with Neovide"')
+    $installContext.Add('"Icon"="' + $iconReg + ',0"')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide\command]')
+    $installContext.Add($launchCommand)
 
-# Right-click a folder.
-$installContext.Add('')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
-$installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $iconReg + ',0"')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
-$installContext.Add($launchCommand)
+    # Right-click a folder.
+    $installContext.Add('')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
+    $installContext.Add('@="Open with Neovide"')
+    $installContext.Add('"Icon"="' + $iconReg + ',0"')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
+    $installContext.Add($launchCommand)
 
-# Right-click the background inside a folder.
-$installContext.Add('')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
-$installContext.Add('@="Open with Neovide"')
-$installContext.Add('"Icon"="' + $iconReg + ',0"')
-$installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
-$installContext.Add($launchFolderCommand)
+    # Right-click the background inside a folder.
+    $installContext.Add('')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
+    $installContext.Add('@="Open with Neovide"')
+    $installContext.Add('"Icon"="' + $iconReg + ',0"')
+    $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
+    $installContext.Add($launchFolderCommand)
+}
 
 $uninstallContext.Add('')
 $uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Neovide]')
 $uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide]')
 $uninstallContext.Add('[-HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide]')
 
-$files = @{
-    'install-associations.reg'   = $installAssociations
-    'uninstall-associations.reg' = $uninstallAssociations
-    'install-context.reg'        = $installContext
-    'uninstall-context.reg'      = $uninstallContext
+$files = [ordered]@{}
+if (-not $Uninstall) {
+    $files['install-associations.reg'] = $installAssociations
+    $files['install-context.reg'] = $installContext
 }
+$files['uninstall-associations.reg'] = $uninstallAssociations
+$files['uninstall-context.reg'] = $uninstallContext
 
 foreach ($name in $files.Keys) {
     $path = Join-Path $outputDirectory $name
@@ -423,29 +536,30 @@ foreach ($name in $files.Keys) {
 }
 
 Write-Host ''
-Write-Host "Neovide found: $exe" -ForegroundColor Green
+if (-not $Uninstall) {
+    Write-Host "Neovide found: $exe" -ForegroundColor Green
+}
 Write-Host "Generated registry files in: $outputDirectory" -ForegroundColor Green
 Write-Host ''
 
-if ($Import) {
+if ($Uninstall) {
+    Write-Host 'Removing associations and context menu...' -ForegroundColor Cyan
+    Start-Process reg.exe -ArgumentList "import `"$outputDirectory\uninstall-associations.reg`"" -Wait -NoNewWindow
+    Start-Process reg.exe -ArgumentList "import `"$outputDirectory\uninstall-context.reg`"" -Wait -NoNewWindow
+
+    # .reg cannot delete keys conditionally, so remove what our value deletions emptied.
+    Invoke-UninstallCleanup -Extensions $extensions
+    Invoke-ShellRefresh
+    Write-Host 'Registry entries successfully removed.' -ForegroundColor Green
+} elseif ($Import) {
     Write-Host 'Importing associations and context menu...' -ForegroundColor Cyan
     Start-Process reg.exe -ArgumentList "import `"$outputDirectory\install-associations.reg`"" -Wait -NoNewWindow
     Start-Process reg.exe -ArgumentList "import `"$outputDirectory\install-context.reg`"" -Wait -NoNewWindow
 
-    # Invalidate Windows Explorer icon & association cache.
-    if (-not ('ShellRefresh' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class ShellRefresh {
-    [DllImport("shell32.dll")]
-    public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
-}
-'@
-    }
-    [ShellRefresh]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+    Invoke-ShellRefresh
     Write-Host 'Registry entries successfully imported.' -ForegroundColor Green
 } else {
     Write-Host 'Import install-associations.reg and install-context.reg to apply.'
     Write-Host 'Or run with -Import to apply automatically.'
+    Write-Host 'Run with -Uninstall to remove the entries.'
 }

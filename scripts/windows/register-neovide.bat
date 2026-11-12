@@ -16,6 +16,10 @@ if /i "%~1"=="" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Import
 ) else if /i "%~1"=="-import" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Import
+) else if /i "%~1"=="uninstall" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Uninstall
+) else if /i "%~1"=="-uninstall" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Uninstall
 ) else (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -NeovidePath "%~1"
 )
