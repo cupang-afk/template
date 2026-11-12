@@ -6,11 +6,6 @@ scripts/windows/*.reg
 lazy-lock.json
 
 # Launcher binaries
-scripts/windows/launcher/*.exe
-scripts/windows/launcher/*.obj
-scripts/windows/launcher/*.o
-scripts/windows/launcher/*.res
-
-# Auto-downloaded portable TCC
-scripts/windows/launcher/tcc/
-
+scripts/launcher/neovide-launcher
+scripts/launcher/neovide-launcher.exe
+scripts/launcher/neovide-launcher-*

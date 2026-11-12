@@ -1,41 +1,52 @@
 if not vim.g.neovide then return {} end
 
--- Windows single-instance IPC: per-instance pipe + active window tracker
-if vim.fn.has("win32") == 1 then
-  local pid = vim.fn.getpid()
-  local instance_pipe = string.format([[\\.\pipe\neovide_%d]], pid)
-  pcall(vim.fn.serverstart, instance_pipe)
-  pcall(vim.fn.serverstart, [[\\.\pipe\neovide]])
+-- Cross-platform single-instance IPC: per-instance server + active window tracker
+local is_windows = vim.fn.has("win32") == 1
+local tmp = is_windows and (vim.env.TMP or vim.env.TEMP or "C:\\Windows\\Temp")
+  or (vim.env.TMPDIR or "/tmp")
+tmp = tmp:gsub("[/\\]+$", "")
 
-  local active_file = (vim.env.TEMP or "C:\\Windows\\Temp") .. [[\neovide_active.pipe]]
-  local function mark_active()
-    local f = io.open(active_file, "w")
-    if f then
-      f:write(instance_pipe)
-      f:close()
-    end
-  end
-  mark_active()
-
-  vim.api.nvim_create_autocmd("FocusGained", {
-    desc = "Track most recently focused Neovide instance for launcher",
-    callback = mark_active,
-  })
-
-  vim.api.nvim_create_autocmd("VimLeavePre", {
-    desc = "Clear active Neovide pipe on exit",
-    callback = function()
-      local f = io.open(active_file, "r")
-      if f then
-        local cur = f:read("*all")
-        f:close()
-        if cur == instance_pipe then
-          os.remove(active_file)
-        end
-      end
-    end,
-  })
+local pid = vim.fn.getpid()
+local instance_pipe, fallback_pipe
+if is_windows then
+  instance_pipe = string.format([[\\.\pipe\neovide_%d]], pid)
+  fallback_pipe = [[\\.\pipe\neovide]]
+else
+  instance_pipe = string.format("%s/neovide_%d.sock", tmp, pid)
+  fallback_pipe = string.format("%s/neovide.sock", tmp)
 end
+
+pcall(vim.fn.serverstart, instance_pipe)
+pcall(vim.fn.serverstart, fallback_pipe)
+
+local active_file = string.format("%s/neovide_active.pipe", tmp)
+local function mark_active()
+  local f = io.open(active_file, "w")
+  if f then
+    f:write(instance_pipe)
+    f:close()
+  end
+end
+mark_active()
+
+vim.api.nvim_create_autocmd("FocusGained", {
+  desc = "Track most recently focused Neovide instance for launcher",
+  callback = mark_active,
+})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  desc = "Clear active Neovide server on exit",
+  callback = function()
+    local f = io.open(active_file, "r")
+    if f then
+      local cur = f:read("*all")
+      f:close()
+      if cur == instance_pipe then
+        os.remove(active_file)
+      end
+    end
+  end,
+})
 
 ---@type LazySpec
 return {

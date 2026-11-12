@@ -366,7 +366,7 @@ if (-not $Uninstall) {
     $exeReg = ConvertTo-RegString $exe
 
     # Check for the single-instance launcher.
-    $launcherDir = Join-Path $PSScriptRoot 'launcher'
+    $launcherDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'launcher'
     $launcherExe = Join-Path $launcherDir 'neovide-launcher.exe'
     if (-not (Test-Path $launcherExe)) {
         $buildBat = Join-Path $launcherDir 'build.bat'
@@ -376,7 +376,7 @@ if (-not $Uninstall) {
         }
     }
     if (-not (Test-Path $launcherExe)) {
-        Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\windows\launcher\build.bat <compiler>.'
+        Write-Warning 'neovide-launcher.exe is unavailable; using neovide.exe directly. Build it with scripts\launcher\build.bat.'
     }
 
     $cmdExe = if (Test-Path $launcherExe) { $launcherExe } else { $exe }
