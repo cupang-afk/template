@@ -43,6 +43,9 @@ return {
   ---@type AstroCoreOpts
   opts = {
     options = {
+      g = {
+        neovide_floating_shadow = false,
+      },
       opt = {
         guifont = "CaskaydiaCove Nerd Font:h10",
       },
