@@ -35,6 +35,7 @@ return {
         noice = true,
         notifier = true,
         nvim_surround = true,
+        render_markdown = true,
         snacks = { indent_scope_color = "lavender" },
         treesitter_context = true,
         which_key = true,
@@ -113,6 +114,7 @@ return {
   { import = "astrocommunity.git.diffview-nvim" },
   { import = "astrocommunity.icon.mini-icons" },
   { import = "astrocommunity.editing-support.treesj" },
+  { import = "astrocommunity.markdown-and-latex.render-markdown-nvim" },
   { import = "astrocommunity.search.grug-far-nvim" },
   {
     import = "astrocommunity.split-and-window.neominimap-nvim",
