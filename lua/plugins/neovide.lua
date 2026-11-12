@@ -2,9 +2,22 @@ if not vim.g.neovide then return {} end
 
 -- Cross-platform single-instance IPC: per-instance server + active window tracker
 local is_windows = vim.fn.has("win32") == 1
-local tmp = is_windows and (vim.env.TMP or vim.env.TEMP or "C:\\Windows\\Temp")
-  or (vim.env.TMPDIR or "/tmp")
-tmp = tmp:gsub("[/\\]+$", "")
+
+local function state_dir()
+  if is_windows then
+    return vim.env.TMP or vim.env.TEMP or "C:\\Windows\\Temp"
+  end
+  -- $XDG_RUNTIME_DIR (/run/user/<uid>) is per-user and mode 0700, so it needs
+  -- no administrator rights and keeps the socket out of world-writable /tmp.
+  for _, dir in ipairs({ vim.env.XDG_RUNTIME_DIR, vim.env.TMPDIR, "/tmp" }) do
+    if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 and vim.fn.filewritable(dir) == 1 then
+      return dir
+    end
+  end
+  return "/tmp"
+end
+
+local tmp = state_dir():gsub("[/\\]+$", "")
 
 local pid = vim.fn.getpid()
 local instance_pipe, fallback_pipe

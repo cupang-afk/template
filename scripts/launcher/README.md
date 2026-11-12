@@ -45,13 +45,16 @@ Windows.
 ## Instance discovery
 
 The Neovide Lua config starts a per-instance Neovim server and writes its
-address to `neovide_active.pipe` in the OS temp directory. On `FocusGained` it
-rewrites the file, so the launcher reuses the most recently focused instance.
-On exit it removes the file if it still points at that instance.
+address to `neovide_active.pipe` in the per-user runtime directory on Unix
+(`$XDG_RUNTIME_DIR`, else `$TMPDIR`, else `/tmp`) or the temp directory on
+Windows. On `FocusGained` it rewrites the file, so the launcher reuses the most
+recently focused instance. On exit it removes the file if it still points at
+that instance.
 
 - Windows: named pipes (`\\.\pipe\neovide_<pid>`, fallback `\\.\pipe\neovide`).
-- Unix: Unix sockets (`$TMPDIR/neovide_<pid>.sock`, fallback
-  `$TMPDIR/neovide.sock`).
+- Unix: Unix sockets in `$XDG_RUNTIME_DIR` (`/run/user/<uid>`, mode 0700),
+  falling back to `$TMPDIR` and then `/tmp`
+  (`neovide_<pid>.sock`, fallback `neovide.sock`).
 
 ## Platform behavior
 

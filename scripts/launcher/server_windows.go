@@ -3,10 +3,15 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"syscall"
 	"unsafe"
 )
+
+func stateDir() string {
+	return os.TempDir()
+}
 
 func fallbackServer() string {
 	return `\\.\pipe\neovide`

@@ -15,10 +15,10 @@ const (
 )
 
 // activeFilePath is the file the Neovide Lua config writes the most recently
-// focused server address to. It lives in the OS temp directory, matching the
-// Lua side (vim.env.TMP/TEMP on Windows, TMPDIR on Unix).
+// focused server address to. It lives in the per-user runtime directory on
+// Unix and the OS temp directory on Windows, matching the Lua side.
 func activeFilePath() string {
-	return filepath.Join(os.TempDir(), activeFileName)
+	return filepath.Join(stateDir(), activeFileName)
 }
 
 func activeServer() (string, bool) {
