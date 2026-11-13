@@ -15,6 +15,7 @@ return {
   { import = "astrocommunity.pack.toml" },
   { import = "astrocommunity.pack.yaml" },
   { import = "astrocommunity.pack.markdown" },
+  { import = "astrocommunity.pack.prettier" },
   { import = "astrocommunity.test.neotest" },
   { import = "astrocommunity.utility.noice-nvim" },
   { import = "astrocommunity.diagnostics.trouble-nvim" },
