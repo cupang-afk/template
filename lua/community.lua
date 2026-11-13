@@ -73,11 +73,17 @@ return {
       debounce = 150,
       provider_options = {
         openai_fim_compatible = {
-          model = "gkd 1.5b production production distilled rerun no denoise v2|Q8_0|1537269856",
+          model = "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF",
           end_point = "http://127.0.0.1:6996/v1/completions",
           api_key = function() return "dummy" end,
           name = "TurboLLM",
           stream = true,
+          template = {
+            prompt = function(context_before_cursor, context_after_cursor, _)
+              return "<|fim_prefix|>" .. context_before_cursor .. "<|fim_suffix|>" .. context_after_cursor .. "<|fim_middle|>"
+            end,
+            suffix = false,
+          },
           optional = {
             max_tokens = 32768,
             stop = { "<|file_sep|>", "<|endoftext|>", "\n\n" },
