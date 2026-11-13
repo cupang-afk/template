@@ -63,64 +63,6 @@ return {
   { import = "astrocommunity.comment.ts-comments-nvim" },
   { import = "astrocommunity.ai.sidekick-nvim" },
   { import = "astrocommunity.recipes.ai" },
-  { import = "astrocommunity.ai.minuet-ai-nvim" },
-  {
-    "milanglacier/minuet-ai.nvim",
-    opts = {
-      provider = "openai_fim_compatible",
-      n_completions = 1,
-      throttle = 200,
-      debounce = 150,
-      provider_options = {
-        openai_fim_compatible = {
-          model = "Qwen2.5-Coder-7B-Instruct-Q8_0-GGUF",
-          end_point = "http://127.0.0.1:6996/v1/completions",
-          api_key = function() return "dummy" end,
-          name = "TurboLLM",
-          stream = true,
-          template = {
-            prompt = function(context_before_cursor, context_after_cursor, _)
-              return "<|fim_prefix|>" .. context_before_cursor .. "<|fim_suffix|>" .. context_after_cursor .. "<|fim_middle|>"
-            end,
-            suffix = false,
-          },
-          optional = {
-            max_tokens = 32768,
-            stop = { "<|file_sep|>", "<|endoftext|>", "\n\n" },
-          },
-        },
-      },
-      virtualtext = {
-        auto_trigger_ft = { "*" },
-        keymap = {
-          accept = false, -- handled by recipes.ai (<Tab>)
-          accept_line = nil,
-          accept_n_lines = nil,
-          prev = nil,
-          next = nil,
-          dismiss = nil,
-        },
-      },
-    },
-    specs = {
-      {
-        "AstroNvim/astrocore",
-        opts = {
-          options = {
-            g = {
-              ai_accept = function()
-                local vt = require "minuet.virtualtext"
-                if vt.action.is_visible() then
-                  vt.action.accept()
-                  return true
-                end
-              end,
-            },
-          },
-        },
-      },
-    },
-  },
   { import = "astrocommunity.split-and-window.colorful-winsep-nvim" },
   { import = "astrocommunity.recipes.vscode-icons" },
   { import = "astrocommunity.neovim-lua-development.helpview-nvim" },
