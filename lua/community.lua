@@ -79,7 +79,7 @@ return {
           name = "TurboLLM",
           stream = true,
           optional = {
-            max_tokens = 256,
+            max_tokens = 2048,
             stop = { "<|file_sep|>", "<|endoftext|>", "\n\n" },
           },
         },
