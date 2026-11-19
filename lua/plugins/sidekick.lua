@@ -9,6 +9,9 @@ return {
       -- Keep sessions in Neovim terminals. Windows `tmux` is a psmux alias,
       -- and MSYS tmux cannot be driven reliably from Neovim.
       mux = { enabled = false },
+      win = {
+        split = { width = 0.3 },
+      },
       tools = {
         -- Windows: `opencode` resolves to the npx .CMD shim, which sidekick
         -- can't launch. Use the scoop .exe shim there. macOS and Linux use
