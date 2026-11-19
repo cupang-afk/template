@@ -5,13 +5,17 @@ Cross-platform single-instance helper for Neovide.
 ## Contract
 
 ```
-neovide-launcher <neovide-executable> [neovide args...]
+neovide-launcher <neovide-executable> [--cwd <directory>] [neovide args...]
 ```
 
 - `argv[1]` is the Neovide executable to start.
-- `argv[2..]` are forwarded to Neovide.
-- When a live instance is found, `argv[2]` is opened with
-  `nvim --server <address> --remote-silent <file>` and the instance is focused.
+- `--cwd <directory>` must come first if present. It starts a new Neovide in
+  that directory with no path argument, so the dashboard shows instead of a
+  file explorer. A live instance is ignored in this mode.
+- Remaining arguments are forwarded to Neovide.
+- Without `--cwd`, when a live instance is found, the first forwarded argument
+  is opened with `nvim --server <address> --remote-silent <file>` and the
+  instance is focused.
 - With no live instance, Neovide is started with the forwarded arguments.
 
 The launcher never discovers Neovide itself; the caller passes the executable

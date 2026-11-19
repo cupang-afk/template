@@ -393,10 +393,18 @@ if (-not $Uninstall) {
     } else {
         '@="\"' + $cmdExeReg + '\" \"%1\""'
     }
+    # Folders use --cwd so Neovide starts in the folder with no path argument.
+    # Passing the folder itself makes Neovim open a file explorer instead of the
+    # dashboard. Directory\shell uses %1; Directory\Background\shell uses %V.
     $launchFolderCommand = if ($cmdExe -eq $launcherExe) {
-        '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" \"%V\""'
+        '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" --cwd \"%1\""'
     } else {
-        '@="\"' + $cmdExeReg + '\" \"%V\""'
+        '@="cmd.exe /c cd /d \"%1\" && \"' + $cmdExeReg + '\""'
+    }
+    $launchBackgroundCommand = if ($cmdExe -eq $launcherExe) {
+        '@="\"' + $cmdExeReg + '\" \"' + $exeReg + '\" --cwd \"%V\""'
+    } else {
+        '@="cmd.exe /c cd /d \"%V\" && \"' + $cmdExeReg + '\""'
     }
 }
 
@@ -505,7 +513,7 @@ if (-not $Uninstall) {
     $installContext.Add('@="Open with Neovide"')
     $installContext.Add('"Icon"="' + $iconReg + ',0"')
     $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\shell\Open with Neovide\command]')
-    $installContext.Add($launchCommand)
+    $installContext.Add($launchFolderCommand)
 
     # Right-click the background inside a folder.
     $installContext.Add('')
@@ -513,7 +521,7 @@ if (-not $Uninstall) {
     $installContext.Add('@="Open with Neovide"')
     $installContext.Add('"Icon"="' + $iconReg + ',0"')
     $installContext.Add('[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\Open with Neovide\command]')
-    $installContext.Add($launchFolderCommand)
+    $installContext.Add($launchBackgroundCommand)
 }
 
 $uninstallContext.Add('')

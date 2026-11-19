@@ -52,8 +52,12 @@ func remoteOpen(server, file string) bool {
 
 // spawn starts Neovide without waiting for it to exit. The child is detached
 // so the launcher can return immediately, which is what file managers expect.
-func spawn(exe string, args []string) (int, error) {
+// A non-empty dir becomes the child's working directory.
+func spawn(exe string, args []string, dir string) (int, error) {
 	cmd := exec.Command(exe, args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return 0, err
