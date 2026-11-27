@@ -1,5 +1,6 @@
-local is_windows = vim.fn.has("win32") == 1
+local is_windows = vim.fn.has "win32" == 1
 local opencode_cmd = is_windows and "opencode.exe" or "opencode"
+local agy_cmd = is_windows and "agy.exe" or "agy"
 
 ---@type LazySpec
 return {
@@ -13,6 +14,11 @@ return {
         split = { width = 0.3 },
       },
       tools = {
+        -- Antigravity CLI
+        antigravity = {
+          cmd = { agy_cmd },
+          continue = { "--continue" },
+        },
         -- Windows: `opencode` resolves to the npx .CMD shim, which sidekick
         -- can't launch. Use the scoop .exe shim there. macOS and Linux use
         -- the `opencode` binary on PATH.

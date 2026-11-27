@@ -28,9 +28,7 @@ return {
       opts = {
         options = {
           g = {
-            ai_accept = function()
-              return require("cursortab").accept()
-            end,
+            ai_accept = function() return require("cursortab").accept() end,
           },
         },
         mappings = {
